@@ -918,10 +918,19 @@
   }
 
   function fillCatSelect(sel, type, selected) {
-    const cats = type === 'income' ? CATS_INCOME : CATS_EXPENSE;
+    const cats = sortedCats(type === 'income' ? CATS_INCOME : CATS_EXPENSE);
     sel.innerHTML = cats.map(function (c) {
       return '<option value="' + c + '"' + (c === selected ? ' selected' : '') + '>' + t(c) + '</option>';
     }).join('');
+  }
+
+  function sortedCats(cats) {
+    return cats.slice().sort(function (a, b) {
+      const aOther = a === 'cat.other' || a === 'inc.other';
+      const bOther = b === 'cat.other' || b === 'inc.other';
+      if (aOther !== bOther) return aOther ? 1 : -1;
+      return t(a).localeCompare(t(b), LANG === 'en' ? 'en' : 'pt-BR', { sensitivity: 'base' });
+    });
   }
 
   async function saveTx(id) {
@@ -1180,7 +1189,7 @@
         '<div class="field" id="f-tamount"><label class="field-label">' + t('tmpl.amount') + '</label><input class="input" id="m-tamount" inputmode="decimal" value="' + esc(defAmount) + '">' +
         '<small style="color:var(--faint);font-size:11.5px">' + t('tmpl.amountHint') + '</small></div>' +
         '<div class="field" id="f-tcat"><label class="field-label">' + t('tx.category') + '</label><select class="input" id="m-tcat">' +
-        CATS_EXPENSE.map(function (c) { return '<option value="' + c + '"' + (tp && tp.category === c ? ' selected' : '') + '>' + t(c) + '</option>'; }).join('') +
+        sortedCats(CATS_EXPENSE).map(function (c) { return '<option value="' + c + '"' + (tp && tp.category === c ? ' selected' : '') + '>' + t(c) + '</option>'; }).join('') +
         '</select></div>' +
         '<div class="field" id="f-tbank"><label class="field-label">' + t('tx.bank') + '</label><select class="input" id="m-tbank">' +
         '<option value="">—</option>' +
@@ -1297,7 +1306,7 @@
           '<div class="field"><label class="field-label">' + t('bill.dueDate') + '</label><input class="input" id="m-bdate" type="date" value="' + (b && b.due_date ? b.due_date : todayISO()) + '"></div>') +
         '</div>' +
         '<div class="field"><label class="field-label">' + t('tx.category') + '</label><select class="input" id="m-bcat">' +
-        CATS_EXPENSE.map(function (c) { return '<option value="' + c + '"' + (b && b.category === c ? ' selected' : '') + '>' + t(c) + '</option>'; }).join('') +
+        sortedCats(CATS_EXPENSE).map(function (c) { return '<option value="' + c + '"' + (b && b.category === c ? ' selected' : '') + '>' + t(c) + '</option>'; }).join('') +
         '</select></div>' +
         '<div class="field"><label class="field-label">' + t('tx.bank') + '</label><select class="input" id="m-bbank">' +
         '<option value="">—</option>' +
@@ -1339,10 +1348,12 @@
     const now = new Date();
     const due = billDueDate(b, now);
     const mk = monthKeyFromISO(due);
+    const needsValue = !b.amount;
     openModal({
       title: t('bill.markPaidTitle'),
       body: '<p style="font-size:14px;color:var(--muted)">' + t('bill.markPaidHint', { n: esc(b.name), m: esc(monthLabel(mk, LANG)) }) + '</p>' +
-        '<div class="field" style="margin-top:12px"><input class="input" id="m-pamount" inputmode="decimal" value="' + String(b.amount).replace('.', ',') + '"></div>' +
+        '<div class="field" style="margin-top:12px"><label class="field-label">' + t('bill.amount') + '</label><input class="input" id="m-pamount" inputmode="decimal" value="' + (needsValue ? '' : String(b.amount).replace('.', ',')) + '"></div>' +
+        (needsValue ? '<small style="color:var(--faint);font-size:11.5px">' + t('bill.amountRequiredHint') + '</small>' : '') +
         '<div class="modal-actions">' +
         '<button class="btn btn-soft" data-action="close-modal">' + t('common.cancel') + '</button>' +
         '<button class="btn btn-primary" data-action="confirm-paid" data-id="' + id + '">' + t('bill.markPaid') + '</button></div>'
@@ -1351,13 +1362,16 @@
 
   async function confirmPaid(id) {
     const b = state.data.bills.find(function (x) { return x.id === id; });
+    if (!b) return;
     const amt = parseAmount($('#m-pamount').value);
-    if (!b || amt === null) return;
+    if (amt === null || amt <= 0) { toast(t('bill.amountRequired'), 'err'); return; }
     const now = new Date();
     const due = billDueDate(b, now);
     const mk = monthKeyFromISO(due);
-    const ok = await handleMutation(function () {
-      return dbUpsert('bill_payments', { bill_id: id, month: mk, amount: Math.abs(amt), paid_at: todayISO() }, 'bill_id,month');
+    const paid = Math.abs(amt);
+    const ok = await handleMutation(async function () {
+      await dbUpsert('bill_payments', { bill_id: id, month: mk, amount: paid, paid_at: todayISO() }, 'bill_id,month');
+      if (!b.amount) await dbUpdate('bills', id, { amount: paid });
     });
     if (ok) { closeModal(); toast(t('bill.paidMsg'), 'ok'); }
   }
