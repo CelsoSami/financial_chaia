@@ -259,6 +259,18 @@ select option,select optgroup{background-color:var(--bg-2);color:var(--text)}
 .act-btn.danger:hover{background:var(--danger-bg);color:var(--danger)}
 .row-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 
+.seg{
+  display:grid;grid-template-columns:1fr 1fr;gap:4px;
+  padding:4px;border-radius:var(--radius-sm);
+  background:var(--card-2);border:1px solid var(--border);
+}
+.seg-btn{
+  height:38px;border-radius:9px;font-size:13.5px;font-weight:600;
+  color:var(--muted);transition:background .2s,color .2s;
+}
+.seg-btn.active{background:var(--card);color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.08)}
+html[data-theme="dark"] .seg-btn.active{box-shadow:0 2px 8px rgba(0,0,0,.35)}
+
 .ico{flex:none}
 .stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 @media(min-width:640px){.stat-grid{grid-template-columns:repeat(4,1fr)}}

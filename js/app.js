@@ -98,7 +98,8 @@
     importing: false,
     insightsOpen: false,
     bankRotTimer: null,
-    bankRotIdx: 0
+    bankRotIdx: 0,
+    tmplSeg: 'bills'
   };
 
   function icon(name, cls) {
@@ -356,6 +357,7 @@
           due_day: Number(b.due_day) || 1,
           category: b.category || null,
           bank_id: b.bank_id || null,
+          type: b.type === 'inc' ? 'inc' : 'exp',
           active: true
         });
         await dbUpdate('bills', b.id, { template_id: tpl.id });
@@ -375,6 +377,7 @@
           name: t.name,
           amount: t.kind === 'fixed' && t.amount != null ? Math.abs(Number(t.amount)) : 0,
           kind: 'monthly',
+          type: t.type === 'inc' ? 'inc' : 'exp',
           due_day: Number(t.due_day) || 1,
           due_date: null,
           category: t.category || null,
@@ -435,6 +438,7 @@
     const dueByBank = {};
     (state.data.bills || []).forEach(function (b) {
       if (!b.active) return;
+      if ((b.type || 'exp') === 'inc') return;
       const due = billDueDate(b, now);
       const mk = monthKeyFromISO(due);
       const paid = (state.data.payments || []).some(function (p) { return p.bill_id === b.id && p.month === mk; });
@@ -464,6 +468,7 @@
     const today = todayISO();
     (state.data.bills || []).forEach(function (b) {
       if (!b.active) return;
+      if ((b.type || 'exp') === 'inc') return;
       const due = billDueDate(b, now);
       const mk = monthKeyFromISO(due);
       const paid = (state.data.payments || []).some(function (p) { return p.bill_id === b.id && p.month === mk; });
@@ -1156,49 +1161,64 @@
   }
 
   function renderTemplates() {
-    const templates = state.data.templates || [];
+    const seg = state.tmplSeg === 'income' ? 'income' : 'bills';
+    const list = (state.data.templates || []).filter(function (t) {
+      return t.active && ((t.type || 'exp') === 'inc') === (seg === 'income');
+    });
     const html =
-      '<p style="color:var(--muted);font-size:13.5px;margin-bottom:12px">' + t('tmpl.subtitle') + '</p>' +
-      '<button class="btn btn-dash btn-block" data-action="open-tmpl" style="margin-bottom:12px">' + icon('plus') + t('tmpl.add') + '</button>' +
-      (templates.length ?
-        '<div class="card" style="padding:6px 14px">' + templates.map(function (tp) {
+      '<div class="seg" style="margin-bottom:14px">' +
+      '<button class="seg-btn' + (seg === 'bills' ? ' active' : '') + '" data-action="tmpl-seg" data-seg="bills">' + t('tmpl.segBills') + '</button>' +
+      '<button class="seg-btn' + (seg === 'income' ? ' active' : '') + '" data-action="tmpl-seg" data-seg="income">' + t('tmpl.segIncome') + '</button>' +
+      '</div>' +
+      '<p style="color:var(--muted);font-size:13.5px;margin-bottom:12px">' + (seg === 'income' ? t('tmpl.subtitleIncome') : t('tmpl.subtitle')) + '</p>' +
+      '<button class="btn btn-dash btn-block" data-action="open-tmpl" data-seg="' + seg + '" style="margin-bottom:12px">' + icon('plus') + (seg === 'income' ? t('tmpl.addIncome') : t('tmpl.add')) + '</button>' +
+      (list.length ?
+        '<div class="card" style="padding:6px 14px">' + list.map(function (tp) {
+          const income = (tp.type || 'exp') === 'inc';
           const fixed = tp.kind === 'fixed' && tp.amount != null;
           return '<div class="list-row">' +
-            '<span class="row-ico" style="background:var(--card-2)">' + icon('calendar') + '</span>' +
+            '<span class="row-ico' + (income ? ' inc' : '') + '">' + icon(income ? 'income' : 'calendar') + '</span>' +
             '<div class="row-main"><div class="row-title">' + esc(tp.name) + '</div>' +
-            '<div class="row-sub">' + t('tmpl.dayLabel', { d: Number(tp.due_day) || 1 }) +
+            '<div class="row-sub">' + (income ? t('tmpl.incomeDayLabel', { d: Number(tp.due_day) || 1 }) : t('tmpl.dayLabel', { d: Number(tp.due_day) || 1 })) +
             (fixed ? ' · ' + fmtMoney(tp.amount, LANG) : '') +
             (tp.bank_id ? ' · ' + esc(bankName(tp.bank_id)) : '') + '</div></div>' +
-            '<span class="badge ' + (fixed ? 'good' : 'soft') + '">' + (fixed ? t('tmpl.fixed') : t('tmpl.variable')) + '</span>' +
+            '<span class="badge ' + (income ? 'good' : (fixed ? 'good' : 'soft')) + '">' +
+            (income ? t('tmpl.incomeFixed') : (fixed ? t('tmpl.fixed') : t('tmpl.variable'))) + '</span>' +
             '<button class="row-action" data-action="edit-tmpl" data-id="' + tp.id + '">' + icon('edit') + '</button>' +
             '</div>';
         }).join('') + '</div>' :
-        '<div class="empty">' + icon('calendar') + '<b>' + t('tmpl.empty') + '</b><p>' + t('tmpl.emptyHint') + '</p></div>');
+        '<div class="empty">' + icon(seg === 'income' ? 'income' : 'calendar') + '<b>' + (seg === 'income' ? t('tmpl.emptyIncome') : t('tmpl.empty')) + '</b><p>' + (seg === 'income' ? t('tmpl.emptyIncomeHint') : t('tmpl.emptyHint')) + '</p></div>');
     $('#view').innerHTML = html;
   }
 
-  function openTemplateModal(id) {
+  function openTemplateModal(id, seg) {
     const tp = id ? state.data.templates.find(function (x) { return x.id === id; }) : null;
+    const income = tp ? (tp.type || 'exp') === 'inc' : (seg || state.tmplSeg) === 'income';
     const defKind = tp ? (tp.kind === 'variable' ? 'variable' : 'fixed') : 'fixed';
     const defAmount = tp && tp.amount != null ? String(tp.amount).replace('.', ',') : '';
     openModal({
-      title: tp ? t('tmpl.edit') : t('tmpl.add'),
+      title: tp ? (income ? t('tmpl.editIncome') : t('tmpl.edit')) : (income ? t('tmpl.addIncome') : t('tmpl.add')),
       body:
+        '<input type="hidden" id="m-tseg" value="' + (income ? 'inc' : 'exp') + '">' +
         '<div class="field"><label class="field-label">' + t('tmpl.name') + '</label><input class="input" id="m-tname" value="' + esc(tp ? tp.name : '') + '" placeholder="' + esc(t('tmpl.name')) + '"></div>' +
         '<div class="field"><label class="field-label">' + t('tmpl.type') + '</label><select class="input" id="m-tkind">' +
-        '<option value="fixed"' + (defKind === 'fixed' ? ' selected' : '') + '>' + t('tmpl.fixed') + '</option>' +
-        '<option value="variable"' + (defKind === 'variable' ? ' selected' : '') + '>' + t('tmpl.variable') + '</option>' +
+        (income ?
+          '<option value="fixed"' + (defKind === 'fixed' ? ' selected' : '') + '>' + t('tmpl.incomeFixed') + '</option>' +
+          '<option value="once"' + (defKind === 'once' ? ' selected' : '') + '>' + t('tmpl.incomeOnce') + '</option>' :
+          '<option value="fixed"' + (defKind === 'fixed' ? ' selected' : '') + '>' + t('tmpl.fixed') + '</option>' +
+          '<option value="variable"' + (defKind === 'variable' ? ' selected' : '') + '>' + t('tmpl.variable') + '</option>') +
         '</select></div>' +
         '<div class="field" id="f-tamount"><label class="field-label">' + t('tmpl.amount') + '</label><input class="input" id="m-tamount" inputmode="decimal" value="' + esc(defAmount) + '">' +
-        '<small style="color:var(--faint);font-size:11.5px">' + t('tmpl.amountHint') + '</small></div>' +
+        '<small style="color:var(--faint);font-size:11.5px">' + (income ? t('tmpl.incAmountHint') : t('tmpl.amountHint')) + '</small></div>' +
         '<div class="field" id="f-tcat"><label class="field-label">' + t('tx.category') + '</label><select class="input" id="m-tcat">' +
-        sortedCats(CATS_EXPENSE).map(function (c) { return '<option value="' + c + '"' + (tp && tp.category === c ? ' selected' : '') + '>' + t(c) + '</option>'; }).join('') +
+        sortedCats(income ? CATS_INCOME : CATS_EXPENSE).map(function (c) { return '<option value="' + c + '"' + (tp && tp.category === c ? ' selected' : '') + '>' + t(c) + '</option>'; }).join('') +
         '</select></div>' +
         '<div class="field" id="f-tbank"><label class="field-label">' + t('tx.bank') + '</label><select class="input" id="m-tbank">' +
         '<option value="">—</option>' +
         state.data.banks.map(function (x) { return '<option value="' + x.id + '"' + (tp && tp.bank_id === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') +
         '</select></div>' +
-        '<div class="field"><label class="field-label">' + t('tmpl.dueDay') + '</label><input class="input" id="m-tday" type="number" min="1" max="31" value="' + (tp ? (Number(tp.due_day) || 1) : 5) + '"></div>' +
+        '<div class="field" id="f-tday"><label class="field-label">' + (income ? t('tmpl.incomeDueDay') : t('tmpl.dueDay')) + '</label><input class="input" id="m-tday" type="number" min="1" max="31" value="' + (tp ? (Number(tp.due_day) || 1) : 5) + '"></div>' +
+        '<div class="field hidden" id="f-tdate"><label class="field-label">' + t('tmpl.incomeDueDate') + '</label><input class="input" id="m-tdate" type="date" value="' + todayISO() + '"></div>' +
         '<div class="modal-actions">' +
         '<button class="btn btn-soft" data-action="close-modal">' + t('common.cancel') + '</button>' +
         '<button class="btn btn-primary" data-action="save-tmpl"' + (id ? ' data-id="' + id + '"' : '') + '>' + t('common.save') + '</button>' +
@@ -1206,9 +1226,13 @@
       onOpen: function (m) {
         const toggle = function () {
           const fixed = m.querySelector('#m-tkind').value === 'fixed';
+          const isInc = m.querySelector('#m-tseg').value === 'inc';
+          const showVals = fixed || isInc;
           ['#f-tamount', '#f-tcat', '#f-tbank'].forEach(function (sel) {
-            m.querySelector(sel).classList.toggle('hidden', !fixed);
+            m.querySelector(sel).classList.toggle('hidden', !showVals);
           });
+          m.querySelector('#f-tday').classList.toggle('hidden', isInc && !fixed);
+          m.querySelector('#f-tdate').classList.toggle('hidden', !(isInc && !fixed));
         };
         m.querySelector('#m-tkind').addEventListener('change', toggle);
         toggle();
@@ -1217,29 +1241,45 @@
   }
 
   async function saveTemplate(id) {
+    const tp = id ? state.data.templates.find(function (x) { return x.id === id; }) : null;
     const name = $('#m-tname').value.trim();
     const kind = $('#m-tkind').value;
-    const day = parseInt($('#m-tday').value, 10);
+    const seg = $('#m-tseg').value === 'inc' ? 'inc' : 'exp';
     const cat = $('#m-tcat').value;
     const bank = $('#m-tbank').value;
-    if (!name || !day || day < 1 || day > 31) { toast(t('imp.parseError'), 'err'); return; }
     let amount = null;
-    if (kind === 'fixed') {
+    if (kind === 'fixed' || (seg === 'inc' && kind === 'once')) {
       const a = parseAmount($('#m-tamount').value);
       if (a === null) { toast(t('imp.parseError'), 'err'); return; }
       amount = Math.abs(a);
     }
-    const row = { name: name, kind: kind, amount: amount, due_day: day, category: cat || null, bank_id: bank || null, active: true };
+    if (seg === 'inc' && kind === 'once') {
+      const date = $('#m-tdate').value;
+      if (!name || !date || amount === null) { toast(t('imp.parseError'), 'err'); return; }
+      const ok = await handleMutation(function () {
+        return dbInsert('bills', {
+          name: name, amount: amount, kind: 'once', due_day: null, due_date: date,
+          category: cat || null, bank_id: bank || null, active: true, type: 'inc', template_id: null
+        });
+      });
+      if (ok) { closeModal(); toast(t('tmpl.savedIncome'), 'ok'); go('bills'); }
+      return;
+    }
+    const day = parseInt($('#m-tday').value, 10);
+    if (!name || !day || day < 1 || day > 31) { toast(t('imp.parseError'), 'err'); return; }
+    const row = { name: name, kind: kind, amount: amount, due_day: day, category: cat || null, bank_id: bank || null, active: true, type: seg };
     const ok = await handleMutation(function () {
       if (id) return dbUpdate('bill_templates', id, row);
       return dbInsert('bill_templates', row);
     });
-    if (ok) { closeModal(); toast(t('tmpl.saved'), 'ok'); }
+    if (ok) { closeModal(); toast(seg === 'inc' ? t('tmpl.savedIncome') : t('tmpl.saved'), 'ok'); }
   }
 
   function renderBills() {
     const banks = (state.data.banks || []).filter(function (b) { return b.invoice_day; });
-    const bills = (state.data.bills || []).filter(function (b) { return b.active; });
+    const all = (state.data.bills || []).filter(function (b) { return b.active; });
+    const incBills = all.filter(function (b) { return (b.type || 'exp') === 'inc'; });
+    const bills = all.filter(function (b) { return (b.type || 'exp') !== 'inc'; });
     const now = new Date();
     const today = todayISO();
     const html =
@@ -1266,12 +1306,17 @@
                 '<span class="due-chip">' + t('bank.noDebt') + '</span>') + '</div>') +
             '</div></div>';
         }).join('') + '</div>' + '<div class="section-gap"></div>' : '') +
+      (incBills.length ?
+        '<div class="card"><div class="card-title">' + icon('income') + t('tmpl.segIncome') + '</div>' +
+        incBills.map(function (b) { return renderBillRow(b); }).join('') + '</div>' + '<div class="section-gap"></div>' : '') +
       (bills.length ? bills.map(function (b) { return renderBillRow(b); }).join('') :
-        '<div class="empty">' + icon('bills') + '<b>' + t('bill.noBills') + '</b><p>' + t('bill.noBillsHint') + '</p></div>');
+        (incBills.length ? '' :
+          '<div class="empty">' + icon('bills') + '<b>' + t('bill.noBills') + '</b><p>' + t('bill.noBillsHint') + '</p></div>'));
     $('#view').innerHTML = html;
   }
 
   function renderBillRow(b) {
+    const inc = (b.type || 'exp') === 'inc';
     const now = new Date();
     const today = todayISO();
     const due = billDueDate(b, now);
@@ -1279,21 +1324,22 @@
     const paid = (state.data.payments || []).some(function (p) { return p.bill_id === b.id && p.month === mk; });
     const d = diffDays(due, today);
     let status, statusKey;
-    if (paid) { status = 'paid'; statusKey = t('bill.paid'); }
+    if (paid) { status = 'paid'; statusKey = inc ? t('bill.received') : t('bill.paid'); }
     else if (d < 0) { status = 'overdue'; statusKey = t('bill.overdue'); }
     else { status = 'pending'; statusKey = t('bill.pending'); }
+    const markLabel = inc ? t('bill.markReceived') : t('bill.markPaid');
     return '<div class="card"><div class="list-row" style="padding:0 0 10px;border:0">' +
       '<span class="row-ico ' + (status === 'overdue' ? 'exp' : status === 'paid' ? 'inc' : '') + '">' + icon(catIconKey(b.category || 'cat.other')) + '</span>' +
       '<div class="row-main"><div class="row-title">' + esc(b.name) + '</div>' +
       '<div class="row-sub">' + catName(b.category) + ' · ' +
       (b.kind === 'once' ? t('bill.onceDate', { d: fmtDate(due, LANG) }) : t('bill.nextDue', { d: fmtDate(due, LANG) })) + '</div></div>' +
-      '<div class="row-end"><div class="row-amount">' + fmtMoney(b.amount, LANG) + '<small style="color:var(--faint)">' + (b.kind === 'once' ? t('bill.once') : t('bill.monthly')) + '</small></div>' +
+      '<div class="row-end"><div class="row-amount' + (inc ? ' inc' : '') + '">' + (inc ? '+' : '') + fmtMoney(b.amount, LANG) + '<small style="color:var(--faint)">' + (b.kind === 'once' ? t('bill.once') : t('bill.monthly')) + '</small></div>' +
       '<span class="bill-status ' + status + '">' + (status === 'paid' ? icon('check') : '') + statusKey + '</span></div>' +
       '</div>' +
       '<div class="row-actions">' +
       (paid ?
         '<button class="act-btn" data-action="undo-paid" data-id="' + b.id + '">' + t('bill.undoPaid') + '</button>' :
-        '<button class="act-btn primary" data-action="mark-paid" data-id="' + b.id + '">' + t('bill.markPaid') + '</button>') +
+        '<button class="act-btn primary" data-action="mark-paid" data-id="' + b.id + '">' + markLabel + '</button>') +
       '<button class="act-btn" data-action="edit-bill" data-id="' + b.id + '">' + t('common.edit') + '</button>' +
       '<button class="act-btn danger" data-action="del-bill" data-id="' + b.id + '">' + icon('trash') + '</button>' +
       '</div></div>';
@@ -1302,8 +1348,9 @@
   function openBillModal(id) {
     const b = id ? state.data.bills.find(function (x) { return x.id === id; }) : null;
     const monthly = b && b.kind === 'monthly';
+    const inc = b && (b.type || 'exp') === 'inc';
     openModal({
-      title: b ? t('bill.edit') : t('bill.add'),
+      title: b ? (inc ? t('bill.editIncome') : t('bill.edit')) : t('bill.add'),
       body:
         '<div class="field"><label class="field-label">' + t('bill.name') + '</label><input class="input" id="m-bname" value="' + esc(b ? b.name : '') + '"></div>' +
         '<div class="field" style="margin-top:-4px">' +
@@ -1317,7 +1364,7 @@
           '<div class="field"><label class="field-label">' + t('bill.dueDate') + '</label><input class="input" id="m-bdate" type="date" value="' + (b && b.due_date ? b.due_date : todayISO()) + '"></div>') +
         '</div>' +
         '<div class="field"><label class="field-label">' + t('tx.category') + '</label><select class="input" id="m-bcat">' +
-        sortedCats(CATS_EXPENSE).map(function (c) { return '<option value="' + c + '"' + (b && b.category === c ? ' selected' : '') + '>' + t(c) + '</option>'; }).join('') +
+        sortedCats(inc ? CATS_INCOME : CATS_EXPENSE).map(function (c) { return '<option value="' + c + '"' + (b && b.category === c ? ' selected' : '') + '>' + t(c) + '</option>'; }).join('') +
         '</select></div>' +
         '<div class="field"><label class="field-label">' + t('tx.bank') + '</label><select class="input" id="m-bbank">' +
         '<option value="">—</option>' +
@@ -1356,18 +1403,19 @@
   function markPaidFlow(id) {
     const b = state.data.bills.find(function (x) { return x.id === id; });
     if (!b) return;
+    const inc = (b.type || 'exp') === 'inc';
     const now = new Date();
     const due = billDueDate(b, now);
     const mk = monthKeyFromISO(due);
     const needsValue = !b.amount;
     openModal({
-      title: t('bill.markPaidTitle'),
+      title: inc ? t('bill.markReceivedTitle') : t('bill.markPaidTitle'),
       body: '<p style="font-size:14px;color:var(--muted)">' + t('bill.markPaidHint', { n: esc(b.name), m: esc(monthLabel(mk, LANG)) }) + '</p>' +
         '<div class="field" style="margin-top:12px"><label class="field-label">' + t('bill.amount') + '</label><input class="input" id="m-pamount" inputmode="decimal" value="' + (needsValue ? '' : String(b.amount).replace('.', ',')) + '"></div>' +
         (needsValue ? '<small style="color:var(--faint);font-size:11.5px">' + t('bill.amountRequiredHint') + '</small>' : '') +
         '<div class="modal-actions">' +
         '<button class="btn btn-soft" data-action="close-modal">' + t('common.cancel') + '</button>' +
-        '<button class="btn btn-primary" data-action="confirm-paid" data-id="' + id + '">' + t('bill.markPaid') + '</button></div>'
+        '<button class="btn btn-primary" data-action="confirm-paid" data-id="' + id + '">' + (inc ? t('bill.markReceived') : t('bill.markPaid')) + '</button></div>'
     });
   }
 
@@ -1384,7 +1432,7 @@
       await dbUpsert('bill_payments', { bill_id: id, month: mk, amount: paid, paid_at: todayISO() }, 'bill_id,month');
       if (!b.amount) await dbUpdate('bills', id, { amount: paid });
     });
-    if (ok) { closeModal(); toast(t('bill.paidMsg'), 'ok'); }
+    if (ok) { closeModal(); toast((b.type || 'exp') === 'inc' ? t('bill.receivedMsg') : t('bill.paidMsg'), 'ok'); }
   }
 
   async function undoPaid(id) {
@@ -1755,13 +1803,15 @@
       case 'go-settings': go('settings'); break;
       case 'open-actions': $('#actions-sheet').classList.remove('hidden'); break;
       case 'close-actions': $('#actions-sheet').classList.add('hidden'); break;
-      case 'open-tmpl': openTemplateModal(null); break;
+      case 'open-tmpl': openTemplateModal(null, el.getAttribute('data-seg')); break;
       case 'edit-tmpl': openTemplateModal(id); break;
+      case 'tmpl-seg': state.tmplSeg = el.getAttribute('data-seg') === 'income' ? 'income' : 'bills'; renderView(); break;
       case 'save-tmpl': saveTemplate(id); break;
       case 'del-tmpl': {
-        confirmDialog(t('tmpl.deleted'), t('tmpl.confirmDelete'), function () {
+        const isInc = (state.data.templates.find(function (x) { return x.id === id; }) || {}).type === 'inc';
+        confirmDialog(isInc ? t('tmpl.deletedIncome') : t('tmpl.deleted'), isInc ? t('tmpl.confirmDeleteIncome') : t('tmpl.confirmDelete'), function () {
           handleMutation(function () { return dbDelete('bill_templates', id); }).then(function (ok) {
-            if (ok) toast(t('tmpl.deleted'), 'ok');
+            if (ok) toast(isInc ? t('tmpl.deletedIncome') : t('tmpl.deleted'), 'ok');
           });
         });
         break;

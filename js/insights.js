@@ -105,6 +105,7 @@ function buildInsights(state) {
 
   const dueSoon = bills.filter(function (b) {
     if (!b.active) return false;
+    if ((b.type || 'exp') === 'inc') return false;
     const due = billDueDate(b, today);
     const d = diffDays(due, todayISO());
     return d >= 0 && d <= 7;
