@@ -1,4 +1,4 @@
-function resolveAlias(raw, aliasesMap) {
+﻿function resolveAlias(raw, aliasesMap) {
   const k = normalizeName(raw || '');
   if (k && aliasesMap && aliasesMap[k]) return aliasesMap[k];
   return String(raw || '').trim() || '—';
@@ -105,7 +105,7 @@ function buildInsights(state) {
 
   const dueSoon = bills.filter(function (b) {
     if (!b.active) return false;
-    const due = nextDueDate(b.due_day, today);
+    const due = billDueDate(b, today);
     const d = diffDays(due, todayISO());
     return d >= 0 && d <= 7;
   });

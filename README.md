@@ -1,69 +1,44 @@
 # Chaia Finance
 
-Aplicativo web de **controle financeiro familiar** — 100% HTML, CSS e JavaScript, feito para uso no celular, com dados na nuvem **Supabase**. Deploy gratuito via **GitHub Pages**.
+Aplicativo web de **controle financeiro familiar**, feito para usar no celular. Interface em português e inglês, com tema claro/escuro, instalável como aplicativo (PWA) e publicável em qualquer hospedagem estática.
 
 ## Funcionalidades
 
-- **Login fixo** para 2 usuários da família (sem criação de novos usuários)
-- **Dashboard de saúde financeira**: saldo em caixa, dívida total, vencimentos do mês, vencidos em aberto, saldo por banco
-- **Insights inteligentes**: investimentos, cortes de custo, assinaturas recorrentes, contas a vencer, reserva de emergência e mais
-- **Importação de extratos** em **CSV** ou **PDF** (cartão/banco) com seleção do banco e mapeamento automático de colunas
-- **Renomear empresas** (razão social → nome pessoal): vale para todos os extratos automaticamente
-- **Bancos** com saldo, dívida atual editável e dia do vencimento da fatura
-- **Contas e vencimentos** com alertas visuais: vence hoje, amanhã, em breve ou vencida
-- **Transações** com edição manual, categorias e filtros
-- **Tema claro/escuro** e idioma **PT-BR / EN**
-- Design mobile-first, animações de partículas, conquistas e meta diária de orçamento
+- **Acesso privado**: somente usuários autorizados da família entram (cada um com sua própria conta)
+- **Dashboard de saúde financeira**: saldo em caixa, dívida total, vencimentos do mês (por banco), vencidos em aberto e saldo por banco
+- **Bancos**: contas, cartões de crédito e investimentos, com saldo, dívida e dia da fatura
+- **Contas e vencimentos**: contas **mensais** ou **únicas (edição de valores passados)**, com alertas de vencimento (hoje, amanhã, em breve, vencida)
+- **Importação de extratos** em **CSV** ou **PDF** (cartão/banco), com seleção do banco e mapeamento de colunas
+- **Renomear empresas**: razão social → nome pessoal, aplicado automaticamente em todos os extratos
+- **Transações** com edição manual, categorias, filtros e busca
+- **Insights inteligentes**: assinaturas recorrentes, cortes de custo, investimentos, reserva de emergência e mais
+- **Conquistas** e meta diária de orçamento
+- Design mobile-first com animações suaves
 
-## Configuração do Supabase (1ª vez, obrigatória)
+## Como usar
 
-1. Acesse o painel do seu projeto: https://supabase.com/dashboard
-2. **Crie os 2 usuários**: menu **Authentication → Users → Add user**
-   - `evelyn.chaia@chaia.finance` com senha `010319`
-   - `celso.chaia@chaia.finance` com senha `1982734650`
-3. Abra **SQL Editor → New query**, cole todo o conteúdo do **`install.sql`** e clique em **Run** (pode rodar novamente com segurança)
-4. Pronto — o login do app agora usa a autenticação real do Supabase.
+1. Acesse o link do site publicado
+2. Entre com o usuário e a senha fornecidos pelo administrador da família
+3. Comece cadastrando seus **bancos** (saldo atual de cada um) e depois suas **contas** (mensais ou únicas)
+4. Importe extratos (CSV/PDF) para registrar os lançamentos automaticamente
 
-> No app você digita apenas `evelyn.chaia` ou `celso.chaia` (sem o `@chaia.finance` — o app completa automaticamente).
+Dica: use **Mais → Ajustes → Exportar tudo (JSON)** para baixar uma cópia de segurança dos dados.
 
-## Publicar no GitHub Pages
+## Tecnologia
 
-1. Crie um repositório no GitHub e envie o conteúdo da pasta `financial_chaia` (a pasta raiz deve conter `index.html`)
-2. Vá em **Settings → Pages**
-3. Em *Build and deployment*, escolha **Deploy from a branch** → branch `main` → pasta `/ (root)` → **Save**
-4. O site ficará disponível em `https://SEU-USUARIO.github.io/financial_chaia/`
+- **Front-end**: HTML, CSS e JavaScript puros (sem frameworks), PWA instalável
+- **Dados**: sincronizados na nuvem com autenticação por conta; cada sessão dura 30 dias
+- **Gráficos**: desenhados em canvas, sem bibliotecas externas
 
-## Logins (únicos, fixos)
-
-| Usuário        | Senha       |
-|----------------|-------------|
-| evelyn.chaia   | 010319      |
-| celso.chaia    | 1982734650  |
-
-As senhas **não existem no código-fonte**: ficam apenas no Supabase Auth, e a sessão é um token JWT gerenciado pelo próprio Supabase (30 dias).
-
-## Segurança (importante)
-
-O app roda 100% no navegador, então **qualquer pessoa com o link do site consegue ler o código-fonte** (HTML/JS) — inclusive a URL e a chave publicável do Supabase. Isso não é um problema porque:
-
-- As **senhas não estão no código** — estão no Supabase Auth (servidor)
-- Com **RLS ativo**, a chave publicável **sem login não enxerga nenhum dado**: todas as tabelas exigem usuário autenticado
-- Para entrar, a pessoa precisa da senha real — tentativas erradas são rejeitadas pelo servidor
-
-Ambos os usuários compartilham os mesmos dados (controle da família). Se um dia quiser separar os dados por pessoa, basta adicionar uma coluna `owner_id` nas tabelas e trocar as políticas por `auth.uid() = owner_id` — me chame que eu faço essa atualização.
-
-**Bom hábito**: não publique capturas de tela com dados reais, e use o **Mais → Ajustes → Exportar tudo (JSON)** como backup.
-
-## Estrutura
+## Estrutura do projeto
 
 ```
 financial_chaia/
 ├── index.html          # estrutura do app
-├── install.sql         # criação do banco no Supabase (rodar 1x)
 ├── manifest.json       # PWA (instalável no celular)
 ├── css/style.css       # estilos (temas claro/escuro)
 ├── js/
-│   ├── config.js       # URL/chave Supabase + domínio de e-mail do Auth
+│   ├── config.js       # configuração do app (não contém credenciais)
 │   ├── utils.js        # datas, moeda, utilitários
 │   ├── i18n.js         # traduções PT/EN
 │   ├── particles.js    # fundo animado
@@ -75,8 +50,19 @@ financial_chaia/
 └── icons/              # ícones do PWA
 ```
 
-## Observações importantes
+## Privacidade
 
-- **PDF**: apenas faturas com texto extraível funcionam (não escaneadas). Para banco escaneado, use o CSV.
-- **Backup**: em **Mais → Ajustes → Exportar tudo (JSON)** você baixa uma cópia completa dos dados.
-- **Sessão**: depois do login, o app mantém você conectado por 30 dias (token de refresh do Supabase). Para sair, use **Mais → Sair**.
+- O acesso é restrito a usuários cadastrados; a autenticação é feita pelo servidor, **sem senhas armazenadas no código-fonte**
+- Os dados da família são protegidos por políticas de acesso por usuário
+- Este repositório é público: **não inclua senhas, chaves, URLs de projeto ou dados financeiros reais**
+
+## Desenvolvimento
+
+Para testar localmente, sirva a pasta em um servidor estático simples:
+
+```bash
+python -m http.server 8080
+# ou qualquer outro servidor estático
+```
+
+> O app precisa de autenticação configurada para carregar dados; ela é mantida pelo administrador do projeto e não faz parte deste repositório.

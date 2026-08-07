@@ -103,3 +103,8 @@ function sortBanksByName(banks) {
     return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' });
   });
 }
+
+function billDueDate(b, now) {
+  if (b && b.kind === 'once' && b.due_date) return String(b.due_date);
+  return nextDueDate(b && b.due_day, now);
+}

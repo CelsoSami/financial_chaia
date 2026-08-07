@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   'use strict';
 
   const $ = function (s) { return document.querySelector(s); };
@@ -378,7 +378,7 @@
     const dueByBank = {};
     (state.data.bills || []).forEach(function (b) {
       if (!b.active) return;
-      const due = nextDueDate(b.due_day, now);
+      const due = billDueDate(b, now);
       const mk = monthKeyFromISO(due);
       const paid = (state.data.payments || []).some(function (p) { return p.bill_id === b.id && p.month === mk; });
       if (paid) return;
@@ -407,7 +407,7 @@
     const today = todayISO();
     (state.data.bills || []).forEach(function (b) {
       if (!b.active) return;
-      const due = nextDueDate(b.due_day, now);
+      const due = billDueDate(b, now);
       const mk = monthKeyFromISO(due);
       const paid = (state.data.payments || []).some(function (p) { return p.bill_id === b.id && p.month === mk; });
       if (paid) return;
@@ -1116,7 +1116,7 @@
   function renderBillRow(b) {
     const now = new Date();
     const today = todayISO();
-    const due = nextDueDate(b.due_day, now);
+    const due = billDueDate(b, now);
     const mk = monthKeyFromISO(due);
     const paid = (state.data.payments || []).some(function (p) { return p.bill_id === b.id && p.month === mk; });
     const d = diffDays(due, today);
@@ -1127,8 +1127,9 @@
     return '<div class="card"><div class="list-row" style="padding:0 0 10px;border:0">' +
       '<span class="row-ico ' + (status === 'overdue' ? 'exp' : status === 'paid' ? 'inc' : '') + '">' + icon(catIconKey(b.category || 'cat.other')) + '</span>' +
       '<div class="row-main"><div class="row-title">' + esc(b.name) + '</div>' +
-      '<div class="row-sub">' + catName(b.category) + ' · ' + t('bill.nextDue', { d: fmtDate(due, LANG) }) + '</div></div>' +
-      '<div class="row-end"><div class="row-amount">' + fmtMoney(b.amount, LANG) + '<small style="color:var(--faint)">' + t('bill.monthly') + '</small></div>' +
+      '<div class="row-sub">' + catName(b.category) + ' · ' +
+      (b.kind === 'once' ? t('bill.onceDate', { d: fmtDate(due, LANG) }) : t('bill.nextDue', { d: fmtDate(due, LANG) })) + '</div></div>' +
+      '<div class="row-end"><div class="row-amount">' + fmtMoney(b.amount, LANG) + '<small style="color:var(--faint)">' + (b.kind === 'once' ? t('bill.once') : t('bill.monthly')) + '</small></div>' +
       '<span class="bill-status ' + status + '">' + (status === 'paid' ? icon('check') : '') + statusKey + '</span></div>' +
       '</div>' +
       '<div class="modal-actions" style="margin-top:2px">' +
@@ -1146,9 +1147,14 @@
       title: b ? t('bill.edit') : t('bill.add'),
       body:
         '<div class="field"><label class="field-label">' + t('bill.name') + '</label><input class="input" id="m-bname" value="' + esc(b ? b.name : '') + '"></div>' +
+        '<div class="field"><label class="field-label">' + t('bill.kind') + '</label><select class="input" id="m-bkind">' +
+        '<option value="monthly"' + (!b || b.kind !== 'once' ? ' selected' : '') + '>' + t('bill.kindMonthly') + '</option>' +
+        '<option value="once"' + (b && b.kind === 'once' ? ' selected' : '') + '>' + t('bill.kindOnce') + '</option>' +
+        '</select></div>' +
         '<div class="field-grid">' +
         '<div class="field"><label class="field-label">' + t('bill.amount') + '</label><input class="input" id="m-bamount" inputmode="decimal" value="' + (b ? String(b.amount).replace('.', ',') : '') + '"></div>' +
-        '<div class="field"><label class="field-label">' + t('bill.dueDay') + '</label><input class="input" id="m-bday" type="number" min="1" max="31" value="' + (b ? b.due_day : 5) + '"></div>' +
+        '<div class="field" id="f-mbday"><label class="field-label">' + t('bill.dueDay') + '</label><input class="input" id="m-bday" type="number" min="1" max="31" value="' + (b && b.kind !== 'once' ? b.due_day : 5) + '"></div>' +
+        '<div class="field hidden" id="f-mbdate"><label class="field-label">' + t('bill.dueDate') + '</label><input class="input" id="m-bdate" type="date" value="' + (b && b.kind === 'once' && b.due_date ? b.due_date : todayISO()) + '"></div>' +
         '</div>' +
         '<div class="field"><label class="field-label">' + t('tx.category') + '</label><select class="input" id="m-bcat">' +
         CATS_EXPENSE.map(function (c) { return '<option value="' + c + '"' + (b && b.category === c ? ' selected' : '') + '>' + t(c) + '</option>'; }).join('') +
@@ -1160,18 +1166,36 @@
         '<div class="modal-actions">' +
         '<button class="btn btn-soft" data-action="close-modal">' + t('common.cancel') + '</button>' +
         '<button class="btn btn-primary" data-action="save-bill"' + (id ? ' data-id="' + id + '"' : '') + '>' + t('common.save') + '</button>' +
-        '</div>'
+        '</div>',
+      onOpen: function (m) {
+        const toggle = function () {
+          const once = m.querySelector('#m-bkind').value === 'once';
+          m.querySelector('#f-mbday').classList.toggle('hidden', once);
+          m.querySelector('#f-mbdate').classList.toggle('hidden', !once);
+        };
+        m.querySelector('#m-bkind').addEventListener('change', toggle);
+        toggle();
+      }
     });
   }
 
   async function saveBill(id) {
     const name = $('#m-bname').value.trim();
     const amount = parseAmount($('#m-bamount').value);
-    const day = parseInt($('#m-bday').value, 10);
+    const kind = $('#m-bkind').value;
     const cat = $('#m-bcat').value;
     const bank = $('#m-bbank').value;
-    if (!name || amount === null || !day || day < 1 || day > 31) { toast(t('imp.parseError'), 'err'); return; }
-    const row = { name: name, amount: Math.abs(amount), due_day: day, category: cat, bank_id: bank || null, active: true };
+    if (!name || amount === null) { toast(t('imp.parseError'), 'err'); return; }
+    let row;
+    if (kind === 'once') {
+      const date = $('#m-bdate').value;
+      if (!date) { toast(t('imp.parseError'), 'err'); return; }
+      row = { name: name, amount: Math.abs(amount), kind: 'once', due_day: null, due_date: date, category: cat, bank_id: bank || null, active: true };
+    } else {
+      const day = parseInt($('#m-bday').value, 10);
+      if (!day || day < 1 || day > 31) { toast(t('imp.parseError'), 'err'); return; }
+      row = { name: name, amount: Math.abs(amount), kind: 'monthly', due_day: day, due_date: null, category: cat, bank_id: bank || null, active: true };
+    }
     const ok = await handleMutation(function () {
       if (id) return dbUpdate('bills', id, row);
       return dbInsert('bills', row);
@@ -1183,7 +1207,7 @@
     const b = state.data.bills.find(function (x) { return x.id === id; });
     if (!b) return;
     const now = new Date();
-    const due = nextDueDate(b.due_day, now);
+    const due = billDueDate(b, now);
     const mk = monthKeyFromISO(due);
     openModal({
       title: t('bill.markPaidTitle'),
@@ -1200,7 +1224,7 @@
     const amt = parseAmount($('#m-pamount').value);
     if (!b || amt === null) return;
     const now = new Date();
-    const due = nextDueDate(b.due_day, now);
+    const due = billDueDate(b, now);
     const mk = monthKeyFromISO(due);
     const ok = await handleMutation(function () {
       return dbUpsert('bill_payments', { bill_id: id, month: mk, amount: Math.abs(amt), paid_at: todayISO() }, 'bill_id,month');
@@ -1212,7 +1236,7 @@
     const now = new Date();
     const b = state.data.bills.find(function (x) { return x.id === id; });
     if (!b) return;
-    const due = nextDueDate(b.due_day, now);
+    const due = billDueDate(b, now);
     const mk = monthKeyFromISO(due);
     const pay = state.data.payments.find(function (p) { return p.bill_id === id && p.month === mk; });
     if (!pay) return;
@@ -1523,6 +1547,7 @@
         break;
       }
       case 'go-banks': go('banks'); break;
+      case 'go-bills': go('bills'); break;
       case 'go-merchants': go('merchants'); break;
       case 'go-import': go('import'); break;
       case 'go-settings': go('settings'); break;
