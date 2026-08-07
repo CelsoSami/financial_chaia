@@ -469,10 +469,11 @@
       if (paid) return;
       const name = b.name;
       const d = diffDays(due, today);
-      if (d < 0) out.push({ tone: 'danger', ic: 'alert', title: t('alert.overdue'), sub: name + ' — ' + fmtDate(due, LANG) });
-      else if (d === 0) out.push({ tone: 'danger', ic: 'alert', title: t('alert.dueToday'), sub: name + ' — ' + fmtMoney(b.amount, LANG) });
-      else if (d === 1) out.push({ tone: 'warn', ic: 'calendar', title: t('alert.dueTomorrow'), sub: name + ' — ' + fmtMoney(b.amount, LANG) });
-      else if (d <= 7) out.push({ tone: 'warn', ic: 'calendar', title: t('alert.dueSoon', { n: d }), sub: name + ' — ' + fmtDate(due, LANG) });
+      const val = Number(b.amount) > 0 ? ' — ' + fmtMoney(b.amount, LANG) : '';
+      if (d < 0) out.push({ tone: 'danger', ic: 'alert', title: t('alert.overdue'), sub: name + val + ' — ' + fmtDate(due, LANG) });
+      else if (d === 0) out.push({ tone: 'danger', ic: 'alert', title: t('alert.dueToday'), sub: name + val });
+      else if (d === 1) out.push({ tone: 'warn', ic: 'calendar', title: t('alert.dueTomorrow'), sub: name + val });
+      else if (d <= 7) out.push({ tone: 'warn', ic: 'calendar', title: t('alert.dueSoon', { n: d }), sub: name + val + ' — ' + fmtDate(due, LANG) });
     });
     (state.data.banks || []).forEach(function (b) {
       if (!b.invoice_day) return;
