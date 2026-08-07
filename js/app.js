@@ -87,7 +87,7 @@
   const state = {
     user: null,
     view: 'home',
-    data: { banks: [], tx: [], aliases: [], bills: [], templates: [], payments: [], settings: {} },
+    data: { banks: [], tx: [], aliases: [], bills: [], templates: [], payments: [], bankPayments: [], settings: {} },
     aliasesMap: {},
     bankMap: {},
     setupNeeded: false,
@@ -287,7 +287,7 @@
       const check = await apiCheck();
       if (!check.ok) {
         state.setupNeeded = true;
-    state.data = { banks: [], tx: [], aliases: [], bills: [], templates: [], payments: [], settings: {} };
+    state.data = { banks: [], tx: [], aliases: [], bills: [], templates: [], payments: [], bankPayments: [], settings: {} };
         buildAliasesMap();
         buildBankMap();
         setSync('err');
@@ -295,8 +295,8 @@
         return;
       }
       state.setupNeeded = false;
-      const [banks, tx, aliases, bills, templates, payments, settings] = await Promise.all([
-        dbFetch('banks'), dbFetch('transactions'), dbFetch('aliases'), dbFetch('bills'), dbFetch('bill_templates'), dbFetch('bill_payments'), dbFetch('settings')
+      const [banks, tx, aliases, bills, templates, payments, bankPayments, settings] = await Promise.all([
+        dbFetch('banks'), dbFetch('transactions'), dbFetch('aliases'), dbFetch('bills'), dbFetch('bill_templates'), dbFetch('bill_payments'), dbFetch('bank_payments'), dbFetch('settings')
       ]);
       const settingsObj = {};
       (settings || []).forEach(function (s) { settingsObj[s.key] = s.value; });
@@ -307,6 +307,7 @@
         bills: bills || [],
         templates: (templates || []).sort(function (a, b) { return (Number(a.due_day) || 31) - (Number(b.due_day) || 31); }),
         payments: payments || [],
+        bankPayments: bankPayments || [],
         settings: settingsObj
       };
       buildAliasesMap();
@@ -477,6 +478,7 @@
     });
     (state.data.banks || []).forEach(function (b) {
       if (!b.invoice_day) return;
+      if (bankInvoicePaid(b)) return;
       const due = nextDueDate(b.invoice_day, now);
       const d = diffDays(due, today);
       if (d >= -3 && d <= 3 && (Number(b.debt) > 0 || b.kind === 'credit')) {
@@ -1248,13 +1250,24 @@
           const due = nextDueDate(b.invoice_day, now);
           const d = diffDays(due, today);
           const cls = d < 0 ? 'today' : (d <= 3 ? 'soon' : '');
-          return '<div class="list-row">' +
+          const pay = bankInvoicePaid(b);
+          return '<div class="card" style="background:var(--card-2);margin-bottom:8px"><div class="list-row" style="padding:0 0 10px;border:0">' +
             '<span class="bank-dot" style="background:' + (b.color || '#10b981') + ';width:36px;height:36px;font-size:13px">' + esc(b.name.slice(0, 1).toUpperCase()) + '</span>' +
             '<div class="row-main"><div class="row-title">' + esc(b.name) + '</div>' +
-            '<div class="row-sub due-chip ' + cls + '">' + t('bank.invoiceOn', { d: b.invoice_day }) + ' · ' + fmtDate(due, LANG) +
-            (d < 0 ? ' · ' + t('bill.overdue') : d === 0 ? ' · ' + t('alert.dueToday') : d === 1 ? ' · ' + t('alert.dueTomorrow') : '') + '</div></div>' +
+            (pay ?
+              '<div class="row-sub"><span class="bill-status paid">' + icon('check') + t('bank.invoicePaid') + '</span> · ' + fmtDate(pay.paid_at || due, LANG) + '</div>' :
+              '<div class="row-sub due-chip ' + cls + '">' + t('bank.invoiceOn', { d: b.invoice_day }) + ' · ' + fmtDate(due, LANG) +
+              (d < 0 ? ' · ' + t('bill.overdue') : d === 0 ? ' · ' + t('alert.dueToday') : d === 1 ? ' · ' + t('alert.dueTomorrow') : '') + '</div>') +
+            '</div>' +
             '<div class="row-end"><div class="row-amount">' + fmtMoney(b.debt || 0, LANG) + '</div>' +
-            '<small style="color:var(--faint)">' + t('bank.debtLabel') + '</small></div></div>';
+            '<small style="color:var(--faint)">' + (pay ? t('bank.invoicePaid') : t('bank.debtLabel')) + '</small></div></div>' +
+            '<div class="modal-actions" style="margin-top:2px">' +
+            (pay ?
+              '<button class="btn btn-sm btn-soft" data-action="undo-invoice-paid" data-id="' + b.id + '">' + t('bill.undoPaid') + '</button>' :
+              (Number(b.debt) > 0 ?
+                '<button class="btn btn-sm btn-primary" data-action="pay-invoice" data-id="' + b.id + '">' + t('bank.payInvoice') + '</button>' :
+                '<span class="due-chip">' + t('bank.noDebt') + '</span>')) +
+            '</div></div>';
         }).join('') + '</div>' + '<div class="section-gap"></div>' : '') +
       (bills.length ? bills.map(function (b) { return renderBillRow(b); }).join('') :
         '<div class="empty">' + icon('bills') + '<b>' + t('bill.noBills') + '</b><p>' + t('bill.noBillsHint') + '</p></div>');
@@ -1387,6 +1400,53 @@
     if (!pay) return;
     const ok = await handleMutation(function () { return dbDelete('bill_payments', pay.id); });
     if (ok) toast(t('bill.unpaidMsg'), 'ok');
+  }
+
+  function bankInvoicePaid(b) {
+    const due = nextDueDate(Number(b.invoice_day) || 1, new Date());
+    const mk = monthKeyFromISO(due);
+    return (state.data.bankPayments || []).find(function (p) { return p.bank_id === b.id && p.month === mk; }) || null;
+  }
+
+  function markInvoicePaidFlow(id) {
+    const b = state.data.banks.find(function (x) { return x.id === id; });
+    if (!b) return;
+    const due = nextDueDate(Number(b.invoice_day) || 1, new Date());
+    const mk = monthKeyFromISO(due);
+    openModal({
+      title: t('bank.invoicePaidTitle'),
+      body: '<p style="font-size:14px;color:var(--muted)">' + t('bank.invoicePaidHint', { n: esc(b.name), m: esc(monthLabel(mk, LANG)) }) + '</p>' +
+        '<div class="field" style="margin-top:12px"><label class="field-label">' + t('bill.amount') + '</label><input class="input" id="m-ipamount" inputmode="decimal" value="' + String(Number(b.debt) || 0).replace('.', ',') + '"></div>' +
+        '<div class="modal-actions">' +
+        '<button class="btn btn-soft" data-action="close-modal">' + t('common.cancel') + '</button>' +
+        '<button class="btn btn-primary" data-action="confirm-invoice-paid" data-id="' + id + '">' + t('bank.payInvoice') + '</button></div>'
+    });
+  }
+
+  async function confirmInvoicePaid(id) {
+    const b = state.data.banks.find(function (x) { return x.id === id; });
+    if (!b) return;
+    const amt = parseAmount($('#m-ipamount').value);
+    if (amt === null || amt <= 0) { toast(t('bank.invoiceAmountRequired'), 'err'); return; }
+    const due = nextDueDate(Number(b.invoice_day) || 1, new Date());
+    const mk = monthKeyFromISO(due);
+    const paid = Math.abs(amt);
+    const ok = await handleMutation(async function () {
+      await dbUpsert('bank_payments', { bank_id: id, month: mk, amount: paid, paid_at: todayISO() }, 'bank_id,month');
+      if (Number(b.debt) > 0) await dbUpdate('banks', id, { debt: 0 });
+    });
+    if (ok) { closeModal(); toast(t('bank.invoicePaidMsg'), 'ok'); }
+  }
+
+  async function undoInvoicePaid(id) {
+    const b = state.data.banks.find(function (x) { return x.id === id; });
+    const pay = b ? bankInvoicePaid(b) : null;
+    if (!pay) return;
+    const ok = await handleMutation(async function () {
+      await dbDelete('bank_payments', pay.id);
+      if (Number(b.debt) === 0 && Number(pay.amount) > 0) await dbUpdate('banks', id, { debt: Number(pay.amount) });
+    });
+    if (ok) toast(t('bank.invoiceUnpaidMsg'), 'ok');
   }
 
   function renderBanks() {
@@ -1587,6 +1647,7 @@
       bills: state.data.bills,
       bill_templates: state.data.templates,
       bill_payments: state.data.payments,
+      bank_payments: state.data.bankPayments,
       settings: state.data.settings
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -1673,7 +1734,7 @@
   async function logout() {
     await supabaseSignOut();
     state.user = null;
-    state.data = { banks: [], tx: [], aliases: [], bills: [], payments: [], settings: {} };
+    state.data = { banks: [], tx: [], aliases: [], bills: [], payments: [], bankPayments: [], settings: {} };
     buildAliasesMap();
     buildBankMap();
     showLogin();
@@ -1736,6 +1797,9 @@
       case 'mark-paid': markPaidFlow(id); break;
       case 'confirm-paid': confirmPaid(id); break;
       case 'undo-paid': undoPaid(id); break;
+      case 'pay-invoice': markInvoicePaidFlow(id); break;
+      case 'confirm-invoice-paid': confirmInvoicePaid(id); break;
+      case 'undo-invoice-paid': undoInvoicePaid(id); break;
       case 'save-alias': saveAlias(el.getAttribute('data-raw')); break;
       case 'merch-pending': state.merchFilter.pendingOnly = val === '1'; renderMerchants(); break;
       case 'toggle-theme': {

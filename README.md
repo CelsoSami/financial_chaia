@@ -6,7 +6,7 @@ Aplicativo web de **controle financeiro familiar**, feito para usar no celular. 
 
 - **Acesso privado**: somente usuários autorizados da família entram (cada um com sua própria conta)
 - **Dashboard de saúde financeira**: saldo em caixa, dívida total, vencimentos do mês (por banco), vencidos em aberto e saldo por banco
-- **Bancos**: contas, cartões de crédito e investimentos, com saldo, dívida e dia da fatura
+- **Bancos**: contas, cartões de crédito e investimentos, com saldo, dívida e dia da fatura — na aba **Contas**, cada cartão tem **Faturas de cartão** com botão **Marcar como pago** (pode desfazer depois); faturas pagas não geram alertas
 - **Registro de Contas**: aba **Registros** com as contas que se repetem todo mês (Luz, Aluguel...) — com **valor fixo** (valor, categoria e banco) ou sem valor definido. **7 dias antes do vencimento**, cada conta vira um lançamento na aba **Contas** e um lembrete na página inicial (Atenção necessária). O lembrete e o lançamento só somem quando você edita o valor e marca como pago
 - **Contas e vencimentos**: lançamentos do mês (criados automaticamente pelo Registro de Contas) e contas únicas (**Edição** — algo que já aconteceu), com alertas de vencimento (hoje, amanhã, em breve, vencida)
 - **Importação de extratos** em **CSV** ou **PDF** (cartão/banco), com seleção do banco e mapeamento de colunas
