@@ -87,7 +87,7 @@
   const state = {
     user: null,
     view: 'home',
-    data: { banks: [], tx: [], aliases: [], bills: [], payments: [], settings: {} },
+    data: { banks: [], tx: [], aliases: [], bills: [], templates: [], payments: [], settings: {} },
     aliasesMap: {},
     bankMap: {},
     setupNeeded: false,
@@ -228,7 +228,7 @@
   }
 
   function viewTitle() {
-    const map = { home: 'dash.insights', tx: 'tx.title', bills: 'bill.title', import: 'imp.title', more: 'set.title', banks: 'bank.title', merchants: 'mer.title', settings: 'set.title' };
+    const map = { home: 'dash.insights', templates: 'tmpl.title', tx: 'tx.title', bills: 'bill.title', import: 'imp.title', more: 'set.title', banks: 'bank.title', merchants: 'mer.title', settings: 'set.title' };
     return t(map[state.view] || 'login.title');
   }
 
@@ -242,6 +242,7 @@
     if (state.setupNeeded) renderSetupBanner();
     else $('#setup-banner').classList.add('hidden');
     if (state.view === 'home') renderHome();
+    else if (state.view === 'templates') renderTemplates();
     else if (state.view === 'tx') renderTx();
     else if (state.view === 'bills') renderBills();
     else if (state.view === 'import') renderImport();
@@ -285,7 +286,7 @@
       const check = await apiCheck();
       if (!check.ok) {
         state.setupNeeded = true;
-        state.data = { banks: [], tx: [], aliases: [], bills: [], payments: [], settings: {} };
+    state.data = { banks: [], tx: [], aliases: [], bills: [], templates: [], payments: [], settings: {} };
         buildAliasesMap();
         buildBankMap();
         setSync('err');
@@ -293,8 +294,8 @@
         return;
       }
       state.setupNeeded = false;
-      const [banks, tx, aliases, bills, payments, settings] = await Promise.all([
-        dbFetch('banks'), dbFetch('transactions'), dbFetch('aliases'), dbFetch('bills'), dbFetch('bill_payments'), dbFetch('settings')
+      const [banks, tx, aliases, bills, templates, payments, settings] = await Promise.all([
+        dbFetch('banks'), dbFetch('transactions'), dbFetch('aliases'), dbFetch('bills'), dbFetch('bill_templates'), dbFetch('bill_payments'), dbFetch('settings')
       ]);
       const settingsObj = {};
       (settings || []).forEach(function (s) { settingsObj[s.key] = s.value; });
@@ -303,11 +304,14 @@
         tx: (tx || []).sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); }),
         aliases: aliases || [],
         bills: bills || [],
+        templates: (templates || []).sort(function (a, b) { return (Number(a.due_day) || 31) - (Number(b.due_day) || 31); }),
         payments: payments || [],
         settings: settingsObj
       };
       buildAliasesMap();
       buildBankMap();
+      const synced = await syncTemplateBills();
+      if (synced) { loadData(true); return; }
       setSync('on');
       renderView();
     } catch (e) {
@@ -336,13 +340,62 @@
     await loadData(true);
   }
 
+  async function syncTemplateBills() {
+    const now = new Date();
+    const today = todayISO();
+    let changed = false;
+    try {
+      const legacy = (state.data.bills || []).filter(function (b) { return b.kind === 'monthly' && !b.template_id; });
+      for (const b of legacy) {
+        const tpl = await dbInsert('bill_templates', {
+          name: b.name,
+          kind: b.amount ? 'fixed' : 'variable',
+          amount: b.amount || null,
+          due_day: Number(b.due_day) || 1,
+          active: true
+        });
+        await dbUpdate('bills', b.id, { template_id: tpl.id });
+        changed = true;
+      }
+      if (legacy.length) toast(t('tmpl.migrated'), 'info');
+      const templates = (state.data.templates || []).filter(function (t) { return t.active; });
+      for (const t of templates) {
+        const due = nextDueDate(Number(t.due_day) || 1, now);
+        const mk = monthKeyFromISO(due);
+        const exists = (state.data.bills || []).some(function (b) {
+          return b.template_id === t.id && monthKeyFromISO(billDueDate(b, now)) === mk;
+        });
+        if (exists) continue;
+        if (diffDays(due, today) > 7) continue;
+        await dbInsert('bills', {
+          name: t.name,
+          amount: t.kind === 'fixed' && t.amount != null ? Math.abs(Number(t.amount)) : 0,
+          kind: 'monthly',
+          due_day: Number(t.due_day) || 1,
+          due_date: null,
+          category: null,
+          bank_id: null,
+          active: true,
+          template_id: t.id
+        });
+        changed = true;
+      }
+    } catch (e) {
+      if (!isSchemaError(e)) throw e;
+      toast(t('con.err.schema'), 'err');
+      return false;
+    }
+    return changed;
+  }
+
   async function handleMutation(fn) {
     try {
       await fn();
       await reloadData();
       return true;
     } catch (e) {
-      if (isPermissionError(e)) toast(t('set.needSetup'), 'err');
+      if (isSchemaError(e)) toast(t('con.err.schema'), 'err');
+      else if (isPermissionError(e)) toast(t('set.needSetup'), 'err');
       else toast(t('con.err.general') + (e && e.message ? ': ' + String(e.message).slice(0, 90) : ''), 'err');
       return false;
     }
@@ -416,7 +469,7 @@
       if (d < 0) out.push({ tone: 'danger', ic: 'alert', title: t('alert.overdue'), sub: name + ' — ' + fmtDate(due, LANG) });
       else if (d === 0) out.push({ tone: 'danger', ic: 'alert', title: t('alert.dueToday'), sub: name + ' — ' + fmtMoney(b.amount, LANG) });
       else if (d === 1) out.push({ tone: 'warn', ic: 'calendar', title: t('alert.dueTomorrow'), sub: name + ' — ' + fmtMoney(b.amount, LANG) });
-      else if (d <= 3) out.push({ tone: 'warn', ic: 'calendar', title: t('alert.dueSoon', { n: d }), sub: name + ' — ' + fmtDate(due, LANG) });
+      else if (d <= 7) out.push({ tone: 'warn', ic: 'calendar', title: t('alert.dueSoon', { n: d }), sub: name + ' — ' + fmtDate(due, LANG) });
     });
     (state.data.banks || []).forEach(function (b) {
       if (!b.invoice_day) return;
@@ -1087,6 +1140,75 @@
     }
   }
 
+  function renderTemplates() {
+    const templates = state.data.templates || [];
+    const html =
+      '<p style="color:var(--muted);font-size:13.5px;margin-bottom:12px">' + t('tmpl.subtitle') + '</p>' +
+      '<button class="btn btn-soft btn-block" data-action="open-tmpl" style="margin-bottom:12px">' + icon('plus') + t('tmpl.add') + '</button>' +
+      (templates.length ?
+        '<div class="card" style="padding:6px 14px">' + templates.map(function (tp) {
+          const fixed = tp.kind === 'fixed' && tp.amount != null;
+          return '<div class="list-row">' +
+            '<span class="row-ico" style="background:var(--card-2)">' + icon('calendar') + '</span>' +
+            '<div class="row-main"><div class="row-title">' + esc(tp.name) + '</div>' +
+            '<div class="row-sub">' + t('tmpl.dayLabel', { d: Number(tp.due_day) || 1 }) +
+            (fixed ? ' · ' + fmtMoney(tp.amount, LANG) : '') + '</div></div>' +
+            '<span class="badge ' + (fixed ? 'good' : 'soft') + '">' + (fixed ? t('tmpl.fixed') : t('tmpl.variable')) + '</span>' +
+            '<button class="row-action" data-action="edit-tmpl" data-id="' + tp.id + '">' + icon('edit') + '</button>' +
+            '</div>';
+        }).join('') + '</div>' :
+        '<div class="empty">' + icon('calendar') + '<b>' + t('tmpl.empty') + '</b><p>' + t('tmpl.emptyHint') + '</p></div>');
+    $('#view').innerHTML = html;
+  }
+
+  function openTemplateModal(id) {
+    const tp = id ? state.data.templates.find(function (x) { return x.id === id; }) : null;
+    const defKind = tp ? (tp.kind === 'variable' ? 'variable' : 'fixed') : 'fixed';
+    const defAmount = tp && tp.amount != null ? String(tp.amount).replace('.', ',') : '';
+    openModal({
+      title: tp ? t('tmpl.edit') : t('tmpl.add'),
+      body:
+        '<div class="field"><label class="field-label">' + t('tmpl.name') + '</label><input class="input" id="m-tname" value="' + esc(tp ? tp.name : '') + '" placeholder="' + esc(t('tmpl.name')) + '"></div>' +
+        '<div class="field"><label class="field-label">' + t('tmpl.type') + '</label><select class="input" id="m-tkind">' +
+        '<option value="fixed"' + (defKind === 'fixed' ? ' selected' : '') + '>' + t('tmpl.fixed') + '</option>' +
+        '<option value="variable"' + (defKind === 'variable' ? ' selected' : '') + '>' + t('tmpl.variable') + '</option>' +
+        '</select></div>' +
+        '<div class="field" id="f-tamount"><label class="field-label">' + t('tmpl.amount') + '</label><input class="input" id="m-tamount" inputmode="decimal" value="' + esc(defAmount) + '">' +
+        '<small style="color:var(--faint);font-size:11.5px">' + t('tmpl.amountHint') + '</small></div>' +
+        '<div class="field"><label class="field-label">' + t('tmpl.dueDay') + '</label><input class="input" id="m-tday" type="number" min="1" max="31" value="' + (tp ? (Number(tp.due_day) || 1) : 5) + '"></div>' +
+        '<div class="modal-actions">' +
+        '<button class="btn btn-soft" data-action="close-modal">' + t('common.cancel') + '</button>' +
+        '<button class="btn btn-primary" data-action="save-tmpl"' + (id ? ' data-id="' + id + '"' : '') + '>' + t('common.save') + '</button>' +
+        '</div>',
+      onOpen: function (m) {
+        const toggle = function () {
+          m.querySelector('#f-tamount').classList.toggle('hidden', m.querySelector('#m-tkind').value !== 'fixed');
+        };
+        m.querySelector('#m-tkind').addEventListener('change', toggle);
+        toggle();
+      }
+    });
+  }
+
+  async function saveTemplate(id) {
+    const name = $('#m-tname').value.trim();
+    const kind = $('#m-tkind').value;
+    const day = parseInt($('#m-tday').value, 10);
+    if (!name || !day || day < 1 || day > 31) { toast(t('imp.parseError'), 'err'); return; }
+    let amount = null;
+    if (kind === 'fixed') {
+      const a = parseAmount($('#m-tamount').value);
+      if (a === null) { toast(t('imp.parseError'), 'err'); return; }
+      amount = Math.abs(a);
+    }
+    const row = { name: name, kind: kind, amount: amount, due_day: day, active: true };
+    const ok = await handleMutation(function () {
+      if (id) return dbUpdate('bill_templates', id, row);
+      return dbInsert('bill_templates', row);
+    });
+    if (ok) { closeModal(); toast(t('tmpl.saved'), 'ok'); }
+  }
+
   function renderBills() {
     const banks = (state.data.banks || []).filter(function (b) { return b.invoice_day; });
     const bills = (state.data.bills || []).filter(function (b) { return b.active; });
@@ -1440,6 +1562,7 @@
       transactions: state.data.tx,
       aliases: state.data.aliases,
       bills: state.data.bills,
+      bill_templates: state.data.templates,
       bill_payments: state.data.payments,
       settings: state.data.settings
     };
@@ -1541,9 +1664,7 @@
     const val = el.getAttribute('data-value');
     switch (a) {
       case 'go': {
-        const v = el.getAttribute('data-view');
-        if (v === 'tx' && el.getAttribute('data-new') === '1') { go('tx'); openTxModal(null); }
-        else go(v);
+        go(el.getAttribute('data-view'));
         break;
       }
       case 'go-banks': go('banks'); break;
@@ -1553,6 +1674,17 @@
       case 'go-settings': go('settings'); break;
       case 'open-actions': $('#actions-sheet').classList.remove('hidden'); break;
       case 'close-actions': $('#actions-sheet').classList.add('hidden'); break;
+      case 'open-tmpl': openTemplateModal(null); break;
+      case 'edit-tmpl': openTemplateModal(id); break;
+      case 'save-tmpl': saveTemplate(id); break;
+      case 'del-tmpl': {
+        confirmDialog(t('tmpl.deleted'), t('tmpl.confirmDelete'), function () {
+          handleMutation(function () { return dbDelete('bill_templates', id); }).then(function (ok) {
+            if (ok) toast(t('tmpl.deleted'), 'ok');
+          });
+        });
+        break;
+      }
       case 'open-tx': openTxModal(null); break;
       case 'edit-tx': openTxModal(id); break;
       case 'save-tx': saveTx(id); break;

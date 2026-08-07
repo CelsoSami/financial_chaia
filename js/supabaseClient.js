@@ -27,6 +27,10 @@ function isAuthError(err) {
   return /invalid login credentials|email not confirmed|invalid api key|token has expired|auth session missing/i.test(String(err && err.message || ''));
 }
 
+function isSchemaError(err) {
+  return /could not find the '[\w]+' column|column [\w.]+ does not exist|PGRST204|PGRST205|42703/i.test(String(err && (err.message || err.details) || ''));
+}
+
 async function supabaseSignIn(email, password) {
   return getClient().auth.signInWithPassword({ email: email, password: password });
 }
