@@ -3,7 +3,7 @@ let sbClient = null;
 function getClient() {
   if (!sbClient) {
     sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false }
+      auth: { persistSession: true, autoRefreshToken: true }
     });
   }
   return sbClient;
@@ -12,25 +12,37 @@ function getClient() {
 async function apiCheck() {
   const { error } = await getClient().from('banks').select('id').limit(1);
   if (!error) return { ok: true, error: null };
-  return { ok: false, error: classifyError(error) };
-}
-
-function classifyError(err) {
-  const m = err && (err.message || err.details || '') || '';
-  const isSetup = /relation .* does not exist|42P01|PGRST205|PGRST204/.test(m);
-  const isPermission = /permission denied|42501|PGRST201/.test(m);
-  const isNet = /fetch|Failed to fetch|Network|connection/i.test(m);
-  return {
-    kind: m.toLowerCase()
-  };
+  return { ok: false, error: error };
 }
 
 function isSetupError(err) {
-  return /relation .+ does not exist|42P01|PGRST205|PGRST204/.test(String(err.message || err.details || ''));
+  return /relation .+ does not exist|42P01|PGRST205|PGRST204/.test(String(err && (err.message || err.details) || ''));
 }
 
 function isPermissionError(err) {
-  return /permission denied|42501|PGRST201|policy/.test(String(err.message || err.details || ''));
+  return /permission denied|42501|PGRST201|policy|JWT|invalid api key|401/i.test(String(err && (err.message || err.details) || ''));
+}
+
+function isAuthError(err) {
+  return /invalid login credentials|email not confirmed|invalid api key|token has expired|auth session missing/i.test(String(err && err.message || ''));
+}
+
+async function supabaseSignIn(email, password) {
+  return getClient().auth.signInWithPassword({ email: email, password: password });
+}
+
+async function supabaseSignOut() {
+  const { error } = await getClient().auth.signOut();
+  return error ? null : true;
+}
+
+async function supabaseSession() {
+  try {
+    const { data } = await getClient().auth.getSession();
+    return data && data.session ? data.session : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 async function dbFetch(table) {
@@ -60,12 +72,6 @@ async function dbUpsert(table, row, onConflict) {
   const { data, error } = await getClient().from(table).upsert(row, { onConflict: onConflict }).select();
   if (error) throw error;
   return (data && data[0]) || row;
-}
-
-async function dbGet(key, { column = 'key', table = 'settings' } = {}) {
-  const { data, error } = await getClient().from(table).select('value').eq(column, key).maybeSingle();
-  if (error) throw error;
-  return data ? data.value : null;
 }
 
 function dbCheck() { return !!sbClient; }

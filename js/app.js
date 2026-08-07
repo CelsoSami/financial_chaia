@@ -145,20 +145,17 @@
     applyI18n();
   }
 
-  function getSession() {
-    try {
-      const s = JSON.parse(localStorage.getItem('fc_session') || 'null');
-      if (s && s.user && s.exp > Date.now()) return s;
-    } catch (e) { }
-    return null;
+  function prettyName(email) {
+    const local = String(email || '').split('@')[0] || '';
+    return local.split('.').map(function (p) {
+      return p ? p.charAt(0).toUpperCase() + p.slice(1) : p;
+    }).join(' ');
   }
 
-  function saveSession(login) {
-    localStorage.setItem('fc_session', JSON.stringify({ user: login, exp: Date.now() + 30 * 86400000 }));
-  }
-
-  function clearSession() {
-    localStorage.removeItem('fc_session');
+  async function currentAuthUser() {
+    const s = await supabaseSession();
+    if (!s || !s.user || !s.user.email) return null;
+    return { login: s.user.email, name: prettyName(s.user.email) };
   }
 
   function toast(msg, tone) {
@@ -1428,12 +1425,18 @@
     const pass = $('#login-pass').value;
     const errEl = $('#login-error');
     errEl.textContent = '';
-    const found = USERS.find(function (u) { return u.login === login; });
-    if (!found) { failLogin(errEl); return; }
-    const h = await hashSHA256(login + ':' + pass);
-    if (h !== found.passHash) { failLogin(errEl); return; }
-    saveSession(found.login);
-    state.user = found;
+    if (!login || !pass) { failLogin(errEl); return; }
+    const email = login.indexOf('@') > -1 ? login : login + AUTH_EMAIL_DOMAIN;
+    const { data, error } = await supabaseSignIn(email, pass);
+    if (error || !data.session) {
+      if (isAuthError(error) || /invalid login credentials/i.test(String(error && error.message || ''))) {
+        failLogin(errEl);
+      } else {
+        errEl.textContent = t('con.err.general') + (error && error.message ? ': ' + String(error.message).slice(0, 80) : '');
+      }
+      return;
+    }
+    state.user = { login: data.session.user.email || email, name: prettyName(data.session.user.email || email) };
     enterApp();
   }
 
@@ -1445,8 +1448,8 @@
     card.classList.add('shake');
   }
 
-  function logout() {
-    clearSession();
+  async function logout() {
+    await supabaseSignOut();
     state.user = null;
     state.data = { banks: [], tx: [], aliases: [], bills: [], payments: [], settings: {} };
     buildAliasesMap();
@@ -1590,19 +1593,17 @@
     if (state.view === 'home') drawHomeCharts();
   }, 200));
 
-  function boot() {
+  async function boot() {
     loadPrefs();
     initParticles();
-    const sess = getSession();
-    if (sess) {
-      const u = USERS.find(function (x) { return x.login === sess.user; });
-      state.user = u || null;
-      if (state.user) enterApp();
-      else showLogin();
+    $('#login-form').addEventListener('submit', doLogin);
+    const u = await currentAuthUser();
+    if (u) {
+      state.user = u;
+      enterApp();
     } else {
       showLogin();
     }
-    $('#login-form').addEventListener('submit', doLogin);
   }
 
   boot();

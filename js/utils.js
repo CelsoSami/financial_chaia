@@ -90,12 +90,3 @@ function debounce(fn, ms) {
     t = setTimeout(function () { fn.apply(c, args); }, ms);
   };
 }
-
-function hashSHA256(s) {
-  if (window.crypto && crypto.subtle) {
-    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)).then(function (buf) {
-      return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
-    });
-  }
-  return Promise.resolve(btoa(unescape(encodeURIComponent(s))));
-}

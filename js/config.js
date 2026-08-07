@@ -1,10 +1,7 @@
 const SUPABASE_URL = 'https://cdnrasyagnzejqouuuju.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_xvHhtuwTRsOjsBclxVxzGw_QgjnWizZ';
 
-const USERS = [
-  { login: 'evelyn.chaia', passHash: 'd7d94123d1667de35fd2c3afd1aef1b78a07194e7ce2a3b2466e558ef2f41cb5', name: 'Evelyn' },
-  { login: 'celso.chaia', passHash: 'd1f7f4f678608499360d3f42b33d47e19dbcc1c50a0c322cccfe6d27ab5a613f', name: 'Celso' }
-];
+const AUTH_EMAIL_DOMAIN = '@chaia.finance';
 
 const APP_NAME = 'Chaia Finance';
 const INSTALL_SQL = [
@@ -62,12 +59,24 @@ const INSTALL_SQL = [
   ');',
   'create index if not exists idx_tx_date on public.transactions(date);',
   'create index if not exists idx_tx_bank on public.transactions(bank_id);',
-  'alter table public.banks disable row level security;',
-  'alter table public.transactions disable row level security;',
-  'alter table public.aliases disable row level security;',
-  'alter table public.bills disable row level security;',
-  'alter table public.bill_payments disable row level security;',
-  'alter table public.settings disable row level security;',
+  'alter table public.banks enable row level security;',
+  'alter table public.transactions enable row level security;',
+  'alter table public.aliases enable row level security;',
+  'alter table public.bills enable row level security;',
+  'alter table public.bill_payments enable row level security;',
+  'alter table public.settings enable row level security;',
+  'drop policy if exists "family_access" on public.banks;',
+  'create policy "family_access" on public.banks for all to authenticated using (true) with check (true);',
+  'drop policy if exists "family_access" on public.transactions;',
+  'create policy "family_access" on public.transactions for all to authenticated using (true) with check (true);',
+  'drop policy if exists "family_access" on public.aliases;',
+  'create policy "family_access" on public.aliases for all to authenticated using (true) with check (true);',
+  'drop policy if exists "family_access" on public.bills;',
+  'create policy "family_access" on public.bills for all to authenticated using (true) with check (true);',
+  'drop policy if exists "family_access" on public.bill_payments;',
+  'create policy "family_access" on public.bill_payments for all to authenticated using (true) with check (true);',
+  'drop policy if exists "family_access" on public.settings;',
+  'create policy "family_access" on public.settings for all to authenticated using (true) with check (true);',
   'grant usage on schema public to anon, authenticated;',
   'grant all on all tables in schema public to anon, authenticated;',
   'grant all on all sequences in schema public to anon, authenticated;'

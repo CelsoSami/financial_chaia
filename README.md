@@ -18,11 +18,13 @@ Aplicativo web de **controle financeiro familiar** — 100% HTML, CSS e JavaScri
 ## Configuração do Supabase (1ª vez, obrigatória)
 
 1. Acesse o painel do seu projeto: https://supabase.com/dashboard
-2. Abra **SQL Editor → New query**
-3. Cole todo o conteúdo do arquivo **`install.sql`** (presente nesta pasta) e clique em **Run**
-4. Pronto. O aplicativo lê/escreve usando a chave publicável já embutida no código.
+2. **Crie os 2 usuários**: menu **Authentication → Users → Add user**
+   - `evelyn.chaia@chaia.finance` com senha `010319`
+   - `celso.chaia@chaia.finance` com senha `1982734650`
+3. Abra **SQL Editor → New query**, cole todo o conteúdo do **`install.sql`** e clique em **Run** (pode rodar novamente com segurança)
+4. Pronto — o login do app agora usa a autenticação real do Supabase.
 
-> O script cria as tabelas (`banks`, `transactions`, `aliases`, `bills`, `bill_payments`, `settings`), desativa RLS e libera acesso para a chave anônima/publicável.
+> No app você digita apenas `evelyn.chaia` ou `celso.chaia` (sem o `@chaia.finance` — o app completa automaticamente).
 
 ## Publicar no GitHub Pages
 
@@ -38,7 +40,19 @@ Aplicativo web de **controle financeiro familiar** — 100% HTML, CSS e JavaScri
 | evelyn.chaia   | 010319      |
 | celso.chaia    | 1982734650  |
 
-As senhas ficam armazenadas como hash SHA-256 no código (não em texto puro), e a sessão dura 30 dias no aparelho.
+As senhas **não existem no código-fonte**: ficam apenas no Supabase Auth, e a sessão é um token JWT gerenciado pelo próprio Supabase (30 dias).
+
+## Segurança (importante)
+
+O app roda 100% no navegador, então **qualquer pessoa com o link do site consegue ler o código-fonte** (HTML/JS) — inclusive a URL e a chave publicável do Supabase. Isso não é um problema porque:
+
+- As **senhas não estão no código** — estão no Supabase Auth (servidor)
+- Com **RLS ativo**, a chave publicável **sem login não enxerga nenhum dado**: todas as tabelas exigem usuário autenticado
+- Para entrar, a pessoa precisa da senha real — tentativas erradas são rejeitadas pelo servidor
+
+Ambos os usuários compartilham os mesmos dados (controle da família). Se um dia quiser separar os dados por pessoa, basta adicionar uma coluna `owner_id` nas tabelas e trocar as políticas por `auth.uid() = owner_id` — me chame que eu faço essa atualização.
+
+**Bom hábito**: não publique capturas de tela com dados reais, e use o **Mais → Ajustes → Exportar tudo (JSON)** como backup.
 
 ## Estrutura
 
@@ -49,7 +63,7 @@ financial_chaia/
 ├── manifest.json       # PWA (instalável no celular)
 ├── css/style.css       # estilos (temas claro/escuro)
 ├── js/
-│   ├── config.js       # URL/chave Supabase + logins (hash)
+│   ├── config.js       # URL/chave Supabase + domínio de e-mail do Auth
 │   ├── utils.js        # datas, moeda, utilitários
 │   ├── i18n.js         # traduções PT/EN
 │   ├── particles.js    # fundo animado
@@ -63,6 +77,6 @@ financial_chaia/
 
 ## Observações importantes
 
-- **Segurança**: o app roda 100% no navegador. Qualquer pessoa com o link do site e as credenciais poderia ler o código e as senhas (mesmo com hash). Recomendações: não publique dados sensíveis além dos extratos já importados, e se quiser mais segurança no futuro, troque o login fixo por autenticação real do Supabase (Auth) com RLS ativo.
 - **PDF**: apenas faturas com texto extraível funcionam (não escaneadas). Para banco escaneado, use o CSV.
 - **Backup**: em **Mais → Ajustes → Exportar tudo (JSON)** você baixa uma cópia completa dos dados.
+- **Sessão**: depois do login, o app mantém você conectado por 30 dias (token de refresh do Supabase). Para sair, use **Mais → Sair**.
