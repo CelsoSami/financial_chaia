@@ -9,7 +9,7 @@ function buildInsights(state) {
   const tx = state.tx || [];
   const banks = state.banks || [];
   const bills = state.bills || [];
-  const cash = Number(state.settings.cash_balance || 0);
+  const cash = totalCash(banks, state.settings.cash_balance);
   const budget = Number(state.settings.monthly_budget || 0);
   const today = new Date();
   const y = today.getFullYear(), m = today.getMonth() + 1;

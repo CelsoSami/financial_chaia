@@ -90,3 +90,16 @@ function debounce(fn, ms) {
     t = setTimeout(function () { fn.apply(c, args); }, ms);
   };
 }
+
+function totalCash(banks, cashSetting) {
+  const inBanks = (banks || []).reduce(function (a, b) {
+    return a + (b.kind === 'credit' ? 0 : (Number(b.balance) || 0));
+  }, 0);
+  return inBanks + (Number(cashSetting) || 0);
+}
+
+function sortBanksByName(banks) {
+  return (banks || []).slice().sort(function (a, b) {
+    return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' });
+  });
+}

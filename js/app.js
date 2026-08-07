@@ -296,7 +296,7 @@
       const settingsObj = {};
       (settings || []).forEach(function (s) { settingsObj[s.key] = s.value; });
       state.data = {
-        banks: banks || [],
+        banks: sortBanksByName(banks),
         tx: (tx || []).sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); }),
         aliases: aliases || [],
         bills: bills || [],
@@ -386,7 +386,7 @@
       dueMonth += pending[d];
     });
     const totalDebt = (state.data.banks || []).reduce(function (a, b) { return a + (Number(b.debt) || 0); }, 0);
-    const cash = Number(state.data.settings.cash_balance || 0);
+    const cash = totalCash(state.data.banks, state.data.settings.cash_balance);
     const monthTx = state.data.tx.filter(function (t) { return isSameMonth(t.date, y, m); });
     const monthSpend = monthTx.filter(function (t) { return t.type === 'expense'; }).reduce(function (a, t) { return a + Math.abs(Number(t.amount) || 0); }, 0);
     const monthIncome = monthTx.filter(function (t) { return t.type === 'income'; }).reduce(function (a, t) { return a + Math.abs(Number(t.amount) || 0); }, 0);
@@ -587,6 +587,12 @@
     return '<button class="quick-tile" data-action="' + action + '">' + icon(ic) + '<span>' + label + '</span></button>';
   }
 
+  function bankKindLabel(kind) {
+    if (kind === 'credit') return t('bank.credit');
+    if (kind === 'invest') return t('bank.invest');
+    return t('bank.debit');
+  }
+
   function renderBankBalances() {
     const banks = state.data.banks || [];
     if (!banks.length) return '<p style="color:var(--muted);font-size:13px">' + t('bank.noBanksHint') + '</p>';
@@ -597,7 +603,7 @@
       return '<div class="list-row">' +
         '<span class="bank-dot" style="background:' + (b.color || '#10b981') + '">' + esc(b.name.slice(0, 1).toUpperCase()) + '</span>' +
         '<div class="row-main"><div class="row-title">' + esc(b.name) + '</div>' +
-        '<div class="row-sub">' + (b.kind === 'credit' ? t('bank.credit') : t('bank.debit')) +
+        '<div class="row-sub">' + bankKindLabel(b.kind) +
         (b.invoice_day ? ' · ' + t('bank.invoiceOn', { d: b.invoice_day }) : '') + '</div></div>' +
         '<div class="row-end"><div class="row-amount' + (b.kind === 'credit' ? (debt > 0 ? '' : ' inc') : (bal < 0 ? '' : ' inc')) + '">' +
         fmtMoney(b.kind === 'credit' ? -debt : bal, LANG) + '</div>' +
@@ -936,7 +942,8 @@
       '<div class="field"><input class="input" id="imp-new-name" placeholder="' + t('imp.bankName') + '"></div>' +
       '<div class="field"><select class="input" id="imp-new-kind">' +
       '<option value="credit">' + t('bank.credit') + '</option>' +
-      '<option value="debit">' + t('bank.debit') + '</option></select></div>' +
+      '<option value="debit">' + t('bank.debit') + '</option>' +
+      '<option value="invest">' + t('bank.invest') + '</option></select></div>' +
       '</div></div>';
   }
 
@@ -1181,7 +1188,7 @@
           return '<div class="list-row">' +
             '<span class="bank-dot" style="background:' + (b.color || '#10b981') + '">' + esc(b.name.slice(0, 1).toUpperCase()) + '</span>' +
             '<div class="row-main"><div class="row-title">' + esc(b.name) + '</div>' +
-            '<div class="row-sub">' + (b.kind === 'credit' ? t('bank.credit') : t('bank.debit')) +
+            '<div class="row-sub">' + bankKindLabel(b.kind) +
             (b.invoice_day ? ' · ' + t('bank.invoiceOn', { d: b.invoice_day }) : '') + '</div></div>' +
             '<div class="row-end"><b class="row-amount">' + fmtMoney(b.kind === 'credit' ? -debt : bal, LANG) + '</b>' +
             '<small style="color:var(--faint)">' + (b.kind === 'credit' ? t('bank.debtLabel') : t('bank.balanceLabel')) + '</small></div>' +
@@ -1201,6 +1208,7 @@
         '<div class="field"><label class="field-label">' + t('bank.kind') + '</label><select class="input" id="m-bankkind">' +
         '<option value="credit"' + (b && b.kind === 'credit' ? ' selected' : !b ? ' selected' : '') + '>' + t('bank.credit') + '</option>' +
         '<option value="debit"' + (b && b.kind === 'debit' ? ' selected' : '') + '>' + t('bank.debit') + '</option>' +
+        '<option value="invest"' + (b && b.kind === 'invest' ? ' selected' : '') + '>' + t('bank.invest') + '</option>' +
         '</select></div>' +
         '<div class="field-grid">' +
         '<div class="field"><label class="field-label">' + t('bank.balance') + '</label><input class="input" id="m-bankbal" inputmode="decimal" value="' + (b ? String(b.balance || 0).replace('.', ',') : '') + '"></div>' +
