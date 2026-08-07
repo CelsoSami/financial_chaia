@@ -225,19 +225,39 @@ select option,select optgroup{background-color:var(--bg-2);color:var(--text)}
 
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  height:46px;padding:0 20px;border-radius:var(--radius-sm);
-  font-weight:700;font-size:14.5px;letter-spacing:.2px;
-  transition:transform .15s,filter .2s,background .2s;
+  height:44px;padding:0 20px;border-radius:var(--radius-sm);
+  font-weight:600;font-size:14px;letter-spacing:.2px;
+  transition:transform .15s,filter .2s,background .2s,border-color .2s,color .2s;
   border:1px solid transparent;
 }
 .btn:active{transform:scale(.97)}
-.btn svg{width:18px;height:18px;fill:currentColor}
-.btn-primary{background:var(--grad);color:#04261b;box-shadow:0 8px 22px color-mix(in srgb,var(--accent) 35%,transparent)}
+.btn svg{width:17px;height:17px;fill:currentColor}
+.btn-primary{background:var(--grad);color:#04261b;box-shadow:0 4px 14px color-mix(in srgb,var(--accent) 25%,transparent)}
+.btn-primary:hover{filter:brightness(1.06)}
 .btn-soft{background:var(--card-2);border-color:var(--border);color:var(--text)}
+.btn-soft:hover{background:color-mix(in srgb,var(--text) 5%,var(--card-2))}
 .btn-danger-soft{background:var(--danger-bg);color:var(--danger)}
+.btn-danger-soft:hover{filter:brightness(1.08)}
+.btn-dash{background:transparent;border:1.5px dashed var(--border);color:var(--muted)}
+.btn-dash:hover{border-color:var(--accent);color:var(--accent)}
 .btn-block{width:100%}
-.btn-sm{height:36px;padding:0 14px;font-size:13px;border-radius:10px}
+.btn-sm{height:34px;padding:0 14px;font-size:12.5px;border-radius:9px}
 .btn:disabled{opacity:.5;pointer-events:none}
+
+.act-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  height:34px;padding:0 12px;border-radius:9px;
+  font-size:13px;font-weight:600;color:var(--muted);
+  transition:background .2s,color .2s,transform .15s;
+}
+.act-btn svg{width:15px;height:15px;fill:currentColor}
+.act-btn:hover{background:var(--card-2);color:var(--text)}
+.act-btn:active{transform:scale(.96)}
+.act-btn.primary{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
+.act-btn.primary:hover{background:color-mix(in srgb,var(--accent) 20%,transparent);color:var(--accent)}
+.act-btn.danger{color:var(--danger)}
+.act-btn.danger:hover{background:var(--danger-bg);color:var(--danger)}
+.row-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 
 .ico{flex:none}
 .stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
@@ -479,6 +499,17 @@ html[data-theme="light"] .hero{color:#04261b;background:linear-gradient(135deg,#
 .due-chip{font-size:11.5px;font-weight:700;color:var(--muted)}
 .due-chip.soon{color:var(--warn)}
 .due-chip.today{color:var(--danger)}
+
+.invoice-row{
+  display:flex;align-items:center;gap:13px;padding:13px 14px;
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--card);margin-bottom:9px;
+}
+.invoice-row .bank-dot{width:36px;height:36px;border-radius:11px;font-size:13px}
+.invoice-end{flex:none;text-align:right}
+.invoice-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:6px}
+.invoice-paid{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--good)}
+.invoice-paid svg{width:12px;height:12px;fill:currentColor}
 
 /* ---------- MERCHANTS ---------- */
 .merchant-row{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--border)}

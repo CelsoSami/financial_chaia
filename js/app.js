@@ -834,7 +834,7 @@
         '</select></div>' : '') +
 
       (list.length ?
-        '<button class="btn btn-soft btn-block" data-action="open-tx" style="margin-bottom:12px">' + icon('plus') + t('tx.add') + '</button>' :
+        '<button class="btn btn-dash btn-block" data-action="open-tx" style="margin-bottom:12px">' + icon('plus') + t('tx.add') + '</button>' :
         '<div class="empty">' + icon('tx') + '<b>' + t('tx.empty') + '</b><p>' + t('tx.emptyHint') + '</p>' +
         '<button class="btn btn-primary btn-sm" data-action="open-tx" style="margin-top:14px">' + t('tx.add') + '</button></div>') +
 
@@ -1159,7 +1159,7 @@
     const templates = state.data.templates || [];
     const html =
       '<p style="color:var(--muted);font-size:13.5px;margin-bottom:12px">' + t('tmpl.subtitle') + '</p>' +
-      '<button class="btn btn-soft btn-block" data-action="open-tmpl" style="margin-bottom:12px">' + icon('plus') + t('tmpl.add') + '</button>' +
+      '<button class="btn btn-dash btn-block" data-action="open-tmpl" style="margin-bottom:12px">' + icon('plus') + t('tmpl.add') + '</button>' +
       (templates.length ?
         '<div class="card" style="padding:6px 14px">' + templates.map(function (tp) {
           const fixed = tp.kind === 'fixed' && tp.amount != null;
@@ -1243,7 +1243,7 @@
     const now = new Date();
     const today = todayISO();
     const html =
-      '<button class="btn btn-soft btn-block" data-action="open-bill" style="margin-bottom:12px">' + icon('plus') + t('bill.add') + '</button>' +
+      '<button class="btn btn-dash btn-block" data-action="open-bill" style="margin-bottom:12px">' + icon('plus') + t('bill.add') + '</button>' +
       (banks.length ?
         '<div class="card"><div class="card-title">' + icon('card') + t('bill.bankInvoices') + '</div>' +
         banks.map(function (b) {
@@ -1251,22 +1251,19 @@
           const d = diffDays(due, today);
           const cls = d < 0 ? 'today' : (d <= 3 ? 'soon' : '');
           const pay = bankInvoicePaid(b);
-          return '<div class="card" style="background:var(--card-2);margin-bottom:8px"><div class="list-row" style="padding:0 0 10px;border:0">' +
-            '<span class="bank-dot" style="background:' + (b.color || '#10b981') + ';width:36px;height:36px;font-size:13px">' + esc(b.name.slice(0, 1).toUpperCase()) + '</span>' +
+          return '<div class="invoice-row">' +
+            '<span class="bank-dot" style="background:' + (b.color || '#10b981') + '">' + esc(b.name.slice(0, 1).toUpperCase()) + '</span>' +
             '<div class="row-main"><div class="row-title">' + esc(b.name) + '</div>' +
+            '<div class="row-sub due-chip ' + (pay ? '' : cls) + '">' + t('bank.invoiceOn', { d: b.invoice_day }) + ' · ' + fmtDate(due, LANG) +
+            (!pay && d < 0 ? ' · ' + t('bill.overdue') : !pay && d === 0 ? ' · ' + t('alert.dueToday') : !pay && d === 1 ? ' · ' + t('alert.dueTomorrow') : '') + '</div></div>' +
+            '<div class="invoice-end">' +
             (pay ?
-              '<div class="row-sub"><span class="bill-status paid">' + icon('check') + t('bank.invoicePaid') + '</span> · ' + fmtDate(pay.paid_at || due, LANG) + '</div>' :
-              '<div class="row-sub due-chip ' + cls + '">' + t('bank.invoiceOn', { d: b.invoice_day }) + ' · ' + fmtDate(due, LANG) +
-              (d < 0 ? ' · ' + t('bill.overdue') : d === 0 ? ' · ' + t('alert.dueToday') : d === 1 ? ' · ' + t('alert.dueTomorrow') : '') + '</div>') +
-            '</div>' +
-            '<div class="row-end"><div class="row-amount">' + fmtMoney(b.debt || 0, LANG) + '</div>' +
-            '<small style="color:var(--faint)">' + (pay ? t('bank.invoicePaid') : t('bank.debtLabel')) + '</small></div></div>' +
-            '<div class="modal-actions" style="margin-top:2px">' +
-            (pay ?
-              '<button class="btn btn-sm btn-soft" data-action="undo-invoice-paid" data-id="' + b.id + '">' + t('bill.undoPaid') + '</button>' :
-              (Number(b.debt) > 0 ?
-                '<button class="btn btn-sm btn-primary" data-action="pay-invoice" data-id="' + b.id + '">' + t('bank.payInvoice') + '</button>' :
-                '<span class="due-chip">' + t('bank.noDebt') + '</span>')) +
+              '<div class="invoice-paid">' + icon('check') + t('bank.invoicePaid') + ' · ' + fmtDate(pay.paid_at || due, LANG) + '</div>' +
+              '<div class="invoice-actions"><button class="act-btn" data-action="undo-invoice-paid" data-id="' + b.id + '">' + t('bill.undoPaid') + '</button></div>' :
+              '<div class="row-amount">' + fmtMoney(b.debt || 0, LANG) + '</div>' +
+              '<div class="invoice-actions">' + (Number(b.debt) > 0 ?
+                '<button class="act-btn primary" data-action="pay-invoice" data-id="' + b.id + '">' + t('bank.payInvoice') + '</button>' :
+                '<span class="due-chip">' + t('bank.noDebt') + '</span>') + '</div>') +
             '</div></div>';
         }).join('') + '</div>' + '<div class="section-gap"></div>' : '') +
       (bills.length ? bills.map(function (b) { return renderBillRow(b); }).join('') :
@@ -1293,12 +1290,12 @@
       '<div class="row-end"><div class="row-amount">' + fmtMoney(b.amount, LANG) + '<small style="color:var(--faint)">' + (b.kind === 'once' ? t('bill.once') : t('bill.monthly')) + '</small></div>' +
       '<span class="bill-status ' + status + '">' + (status === 'paid' ? icon('check') : '') + statusKey + '</span></div>' +
       '</div>' +
-      '<div class="modal-actions" style="margin-top:2px">' +
+      '<div class="row-actions">' +
       (paid ?
-        '<button class="btn btn-sm btn-soft" data-action="undo-paid" data-id="' + b.id + '">' + t('bill.undoPaid') + '</button>' :
-        '<button class="btn btn-sm btn-primary" data-action="mark-paid" data-id="' + b.id + '">' + t('bill.markPaid') + '</button>') +
-      '<button class="btn btn-sm btn-soft" data-action="edit-bill" data-id="' + b.id + '">' + t('common.edit') + '</button>' +
-      '<button class="btn btn-sm btn-danger-soft" data-action="del-bill" data-id="' + b.id + '">' + icon('trash') + '</button>' +
+        '<button class="act-btn" data-action="undo-paid" data-id="' + b.id + '">' + t('bill.undoPaid') + '</button>' :
+        '<button class="act-btn primary" data-action="mark-paid" data-id="' + b.id + '">' + t('bill.markPaid') + '</button>') +
+      '<button class="act-btn" data-action="edit-bill" data-id="' + b.id + '">' + t('common.edit') + '</button>' +
+      '<button class="act-btn danger" data-action="del-bill" data-id="' + b.id + '">' + icon('trash') + '</button>' +
       '</div></div>';
   }
 
@@ -1452,7 +1449,7 @@
   function renderBanks() {
     const banks = state.data.banks || [];
     const html =
-      '<button class="btn btn-soft btn-block" data-action="open-bank" style="margin-bottom:12px">' + icon('plus') + t('bank.add') + '</button>' +
+      '<button class="btn btn-dash btn-block" data-action="open-bank" style="margin-bottom:12px">' + icon('plus') + t('bank.add') + '</button>' +
       (banks.length ?
         '<div class="card" style="padding:6px 14px">' +
         banks.map(function (b) {
