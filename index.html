@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#070c16">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Chaia Finance">
+<title>Chaia Finance</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<canvas id="pbg" aria-hidden="true"></canvas>
+
+<section id="screen-login" class="screen login-screen">
+  <div class="login-wrap">
+    <div class="login-brand">
+      <div class="brand-logo">
+        <svg viewBox="0 0 48 48" width="46" height="46" aria-hidden="true">
+          <defs><linearGradient id="lgc" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#38bdf8"/>
+          </linearGradient></defs>
+          <circle cx="24" cy="24" r="21" fill="none" stroke="url(#lgc)" stroke-width="2.6"/>
+          <circle cx="24" cy="24" r="13.5" fill="none" stroke="url(#lgc)" stroke-width="2.6" stroke-dasharray="6 5"/>
+          <text x="24" y="30.5" text-anchor="middle" font-family="Sora,sans-serif" font-size="17" font-weight="800" fill="url(#lgc)">C</text>
+        </svg>
+      </div>
+      <h1 class="brand-title" data-i18n="login.title">Chaia Finance</h1>
+      <p class="brand-sub" data-i18n="login.subtitle">O controle financeiro da nossa família</p>
+    </div>
+
+    <form id="login-form" class="login-card" autocomplete="off">
+      <label class="field">
+        <span class="field-label" data-i18n="login.user">Usuário</span>
+        <span class="input-shell">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5Z"/></svg>
+          <input id="login-user" type="text" placeholder="evelyn.chaia" required>
+        </span>
+      </label>
+      <label class="field">
+        <span class="field-label" data-i18n="login.password">Senha</span>
+        <span class="input-shell">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M7 10V8a5 5 0 0 1 10 0v2h1a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h1Zm2 0h6V8a3 3 0 0 0-6 0v2Z"/></svg>
+          <input id="login-pass" type="password" placeholder="••••••••" required>
+          <button type="button" class="eye-btn" data-action="toggle-pass" aria-label="show">
+            <svg viewBox="0 0 24 24"><path d="M12 5c-5.4 0-9.3 4.1-10.3 6.2C2.4 12 4.6 17 12 17s9.6-5 10.3-5.8C21.3 9.1 17.4 5 12 5Zm0 3a3 3 0 1 1 0 6 3 3 0 0 1 0-6Zm0 1.7a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Z"/></svg>
+          </button>
+        </span>
+      </label>
+      <p id="login-error" class="login-error" role="alert"></p>
+      <button type="submit" class="btn btn-primary btn-block" data-i18n="login.enter">Entrar</button>
+      <p class="login-version">v1.0 · Chaia Finance</p>
+    </form>
+  </div>
+</section>
+
+<section id="screen-app" class="screen app-screen hidden">
+
+  <header class="app-header">
+    <div class="header-brand">
+      <span class="header-logo">C</span>
+      <span id="header-title" class="header-title">Chaia Finance</span>
+    </div>
+    <div class="header-actions">
+      <span id="sync-dot" class="sync-dot" title=""></span>
+      <button class="icon-btn" data-action="toggle-theme" title="Theme" aria-label="theme">
+        <svg id="ico-theme" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+      <button class="icon-btn" data-action="toggle-lang" title="Language" aria-label="language">
+        <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm-6.9 8h3.1a11 11 0 0 1 .9-4.6A7 7 0 0 0 5.1 11ZM12 5.4c.8 1 1.7 2.5 2.2 4.6h-4.4c.5-2.1 1.4-3.6 2.2-4.6ZM5 12a7 7 0 0 0 .2 1.5H2.3A7 7 0 0 1 2 12c0-.5 0-1 .1-1.5h2.9A7 7 0 0 0 5 12Zm.3 3h3.2c.2 1.8.5 3.4 1 4.6A7 7 0 0 1 5.3 15ZM12 18.6c-.8-1-1.7-2.5-2.2-4.6h4.4c-.5 2.1-1.4 3.6-2.2 4.6ZM14.5 15h-5A13 13 0 0 1 12 7.6 13 13 0 0 1 14.5 15Zm.6 4.6a7 7 0 0 0 1-4.6h3.2a7 7 0 0 1-4.2 4.6Zm1.6-6a11 11 0 0 0 .2-1.5c0-.5 0-1-.1-1.5h2.9c.1.5.1 1 .1 1.5s0 1-.1 1.5h-3Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="setup-banner" class="setup-banner hidden"></div>
+
+  <main id="view" class="view"></main>
+
+  <nav class="bottom-nav" aria-label="Navigation">
+    <button class="nav-item" data-action="go" data-view="home">
+      <svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-9.5Z"/></svg>
+      <span data-i18n="nav.home">Início</span>
+    </button>
+    <button class="nav-item" data-action="go" data-view="tx">
+      <svg viewBox="0 0 24 24"><path d="M4 5h16v2H4V5Zm0 6h16v2H4v-2Zm0 6h10v2H4v-2Zm13-2 4 3.5-4 3.5v-7Z"/></svg>
+      <span data-i18n="nav.tx">Extrato</span>
+    </button>
+    <button class="nav-item nav-fab" data-action="open-actions" aria-label="add">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <button class="nav-item" data-action="go" data-view="bills">
+      <svg viewBox="0 0 24 24"><path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 4v2h6V7H9Zm0 4v2h6v-2H9Zm0 4v2h4v-2H9Z"/></svg>
+      <span data-i18n="nav.bills">Contas</span>
+    </button>
+    <button class="nav-item" data-action="go" data-view="more">
+      <svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0 2.3a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4Zm-9-2.8 2.3-.4a8 8 0 0 1 1.2-2l-1.3-2 2.1-2.1 2 1.3a8 8 0 0 1 2-1.2L11.6 1h3l.4 2.3a8 8 0 0 1 2 1.2l2-1.3 2.1 2.1-1.3 2a8 8 0 0 1 1.2 2l2.3.4v3l-2.3.4a8 8 0 0 1-1.2 2l1.3 2-2.1 2.1-2-1.3a8 8 0 0 1-2 1.2l-.4 2.3h-3l-.4-2.3a8 8 0 0 1-2-1.2l-2 1.3-2.1-2.1 1.3-2a8 8 0 0 1-1.2-2L3 10.5v-3Z"/></svg>
+      <span data-i18n="nav.more">Mais</span>
+    </button>
+  </nav>
+
+  <div id="actions-sheet" class="actions-sheet hidden">
+    <div class="sheet-backdrop" data-action="close-actions"></div>
+    <div class="sheet">
+      <p class="sheet-title" data-i18n="sheet.title">Ações rápidas</p>
+      <button class="sheet-item" data-action="go" data-view="tx" data-new="1">
+        <span class="sheet-ico teal"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+        <span>
+          <strong data-i18n="sheet.addTx">Nova transação</strong>
+          <small data-i18n="sheet.addTxHint">Registre manualmente um lançamento</small>
+        </span>
+      </button>
+      <button class="sheet-item" data-action="go" data-view="import">
+        <span class="sheet-ico blue"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0 4 4m-4-4L8 8M4 14v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/></svg></span>
+        <span>
+          <strong data-i18n="sheet.import">Importar extrato</strong>
+          <small data-i18n="sheet.importHint">CSV ou PDF do cartão / banco</small>
+        </span>
+      </button>
+    </div>
+  </div>
+
+</section>
+
+<div id="modal-root" class="modal-root hidden"></div>
+<div id="toast-root" class="toast-root" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/particles.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/supabaseClient.js"></script>
+<script src="js/importers.js"></script>
+<script src="js/insights.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
