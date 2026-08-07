@@ -7,8 +7,8 @@ Aplicativo web de **controle financeiro familiar**, feito para usar no celular. 
 - **Acesso privado**: somente usuários autorizados da família entram (cada um com sua própria conta)
 - **Dashboard de saúde financeira**: saldo em caixa, dívida total, vencimentos do mês (por banco), vencidos em aberto e saldo por banco
 - **Bancos**: contas, cartões de crédito e investimentos, com saldo, dívida e dia da fatura
-- **Contas mensais da família**: aba **Mensais** com as contas fixas (Luz, Aluguel...) — com ou sem valor definido. **7 dias antes do vencimento**, cada conta vira um lançamento na aba **Contas** e um lembrete na página inicial (Atenção necessária). O lembrete e o lançamento só somem quando você edita o valor e marca como pago
-- **Contas e vencimentos**: lançamentos do mês (criados automaticamente pelas mensais) e contas únicas (**Edição** — algo que já aconteceu), com alertas de vencimento (hoje, amanhã, em breve, vencida)
+- **Registro de Contas**: aba **Registros** com as contas que se repetem todo mês (Luz, Aluguel...) — com **valor fixo** (valor, categoria e banco) ou sem valor definido. **7 dias antes do vencimento**, cada conta vira um lançamento na aba **Contas** e um lembrete na página inicial (Atenção necessária). O lembrete e o lançamento só somem quando você edita o valor e marca como pago
+- **Contas e vencimentos**: lançamentos do mês (criados automaticamente pelo Registro de Contas) e contas únicas (**Edição** — algo que já aconteceu), com alertas de vencimento (hoje, amanhã, em breve, vencida)
 - **Importação de extratos** em **CSV** ou **PDF** (cartão/banco), com seleção do banco e mapeamento de colunas
 - **Renomear empresas**: razão social → nome pessoal, aplicado automaticamente em todos os extratos
 - **Transações** com edição manual, categorias, filtros e busca
@@ -20,7 +20,7 @@ Aplicativo web de **controle financeiro familiar**, feito para usar no celular. 
 
 1. Acesse o link do site publicado
 2. Entre com o usuário e a senha fornecidos pelo administrador da família
-3. Comece cadastrando seus **bancos** (saldo atual de cada um) e depois suas **contas mensais** (aba Mensais, com ou sem valor fixo)
+3. Comece cadastrando seus **bancos** (saldo atual de cada um) e depois as contas mensais no **Registro de Contas** (valor fixo ou sem valor definido)
 4. Importe extratos (CSV/PDF) para registrar os lançamentos automaticamente
 
 Dica: use **Mais → Ajustes → Exportar tudo (JSON)** para baixar uma cópia de segurança dos dados.

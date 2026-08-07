@@ -234,6 +234,7 @@
 
   function renderView() {
     stopBankRotation();
+    $('#header-title').textContent = viewTitle();
     const v = $('#view');
     v.classList.remove('view-enter');
     void v.offsetWidth;
@@ -352,6 +353,8 @@
           kind: b.amount ? 'fixed' : 'variable',
           amount: b.amount || null,
           due_day: Number(b.due_day) || 1,
+          category: b.category || null,
+          bank_id: b.bank_id || null,
           active: true
         });
         await dbUpdate('bills', b.id, { template_id: tpl.id });
@@ -373,8 +376,8 @@
           kind: 'monthly',
           due_day: Number(t.due_day) || 1,
           due_date: null,
-          category: null,
-          bank_id: null,
+          category: t.category || null,
+          bank_id: t.bank_id || null,
           active: true,
           template_id: t.id
         });
@@ -1152,7 +1155,8 @@
             '<span class="row-ico" style="background:var(--card-2)">' + icon('calendar') + '</span>' +
             '<div class="row-main"><div class="row-title">' + esc(tp.name) + '</div>' +
             '<div class="row-sub">' + t('tmpl.dayLabel', { d: Number(tp.due_day) || 1 }) +
-            (fixed ? ' · ' + fmtMoney(tp.amount, LANG) : '') + '</div></div>' +
+            (fixed ? ' · ' + fmtMoney(tp.amount, LANG) : '') +
+            (tp.bank_id ? ' · ' + esc(bankName(tp.bank_id)) : '') + '</div></div>' +
             '<span class="badge ' + (fixed ? 'good' : 'soft') + '">' + (fixed ? t('tmpl.fixed') : t('tmpl.variable')) + '</span>' +
             '<button class="row-action" data-action="edit-tmpl" data-id="' + tp.id + '">' + icon('edit') + '</button>' +
             '</div>';
@@ -1175,6 +1179,13 @@
         '</select></div>' +
         '<div class="field" id="f-tamount"><label class="field-label">' + t('tmpl.amount') + '</label><input class="input" id="m-tamount" inputmode="decimal" value="' + esc(defAmount) + '">' +
         '<small style="color:var(--faint);font-size:11.5px">' + t('tmpl.amountHint') + '</small></div>' +
+        '<div class="field" id="f-tcat"><label class="field-label">' + t('tx.category') + '</label><select class="input" id="m-tcat">' +
+        CATS_EXPENSE.map(function (c) { return '<option value="' + c + '"' + (tp && tp.category === c ? ' selected' : '') + '>' + t(c) + '</option>'; }).join('') +
+        '</select></div>' +
+        '<div class="field" id="f-tbank"><label class="field-label">' + t('tx.bank') + '</label><select class="input" id="m-tbank">' +
+        '<option value="">—</option>' +
+        state.data.banks.map(function (x) { return '<option value="' + x.id + '"' + (tp && tp.bank_id === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') +
+        '</select></div>' +
         '<div class="field"><label class="field-label">' + t('tmpl.dueDay') + '</label><input class="input" id="m-tday" type="number" min="1" max="31" value="' + (tp ? (Number(tp.due_day) || 1) : 5) + '"></div>' +
         '<div class="modal-actions">' +
         '<button class="btn btn-soft" data-action="close-modal">' + t('common.cancel') + '</button>' +
@@ -1182,7 +1193,10 @@
         '</div>',
       onOpen: function (m) {
         const toggle = function () {
-          m.querySelector('#f-tamount').classList.toggle('hidden', m.querySelector('#m-tkind').value !== 'fixed');
+          const fixed = m.querySelector('#m-tkind').value === 'fixed';
+          ['#f-tamount', '#f-tcat', '#f-tbank'].forEach(function (sel) {
+            m.querySelector(sel).classList.toggle('hidden', !fixed);
+          });
         };
         m.querySelector('#m-tkind').addEventListener('change', toggle);
         toggle();
@@ -1194,6 +1208,8 @@
     const name = $('#m-tname').value.trim();
     const kind = $('#m-tkind').value;
     const day = parseInt($('#m-tday').value, 10);
+    const cat = $('#m-tcat').value;
+    const bank = $('#m-tbank').value;
     if (!name || !day || day < 1 || day > 31) { toast(t('imp.parseError'), 'err'); return; }
     let amount = null;
     if (kind === 'fixed') {
@@ -1201,7 +1217,7 @@
       if (a === null) { toast(t('imp.parseError'), 'err'); return; }
       amount = Math.abs(a);
     }
-    const row = { name: name, kind: kind, amount: amount, due_day: day, active: true };
+    const row = { name: name, kind: kind, amount: amount, due_day: day, category: cat || null, bank_id: bank || null, active: true };
     const ok = await handleMutation(function () {
       if (id) return dbUpdate('bill_templates', id, row);
       return dbInsert('bill_templates', row);
@@ -1265,18 +1281,20 @@
 
   function openBillModal(id) {
     const b = id ? state.data.bills.find(function (x) { return x.id === id; }) : null;
+    const monthly = b && b.kind === 'monthly';
     openModal({
       title: b ? t('bill.edit') : t('bill.add'),
       body:
         '<div class="field"><label class="field-label">' + t('bill.name') + '</label><input class="input" id="m-bname" value="' + esc(b ? b.name : '') + '"></div>' +
-        '<div class="field"><label class="field-label">' + t('bill.kind') + '</label><select class="input" id="m-bkind">' +
-        '<option value="monthly"' + (!b || b.kind !== 'once' ? ' selected' : '') + '>' + t('bill.kindMonthly') + '</option>' +
-        '<option value="once"' + (b && b.kind === 'once' ? ' selected' : '') + '>' + t('bill.kindOnce') + '</option>' +
-        '</select></div>' +
+        '<div class="field" style="margin-top:-4px">' +
+        (monthly ?
+          '<small style="color:var(--faint)">' + t('bill.monthly') + ' · ' + t('tmpl.dayLabel', { d: Number(b.due_day) || 1 }) + '</small>' :
+          '<small style="color:var(--faint)">' + t('bill.kindOnceNote') + '</small>') +
+        '</div>' +
         '<div class="field-grid">' +
         '<div class="field"><label class="field-label">' + t('bill.amount') + '</label><input class="input" id="m-bamount" inputmode="decimal" value="' + (b ? String(b.amount).replace('.', ',') : '') + '"></div>' +
-        '<div class="field" id="f-mbday"><label class="field-label">' + t('bill.dueDay') + '</label><input class="input" id="m-bday" type="number" min="1" max="31" value="' + (b && b.kind !== 'once' ? b.due_day : 5) + '"></div>' +
-        '<div class="field hidden" id="f-mbdate"><label class="field-label">' + t('bill.dueDate') + '</label><input class="input" id="m-bdate" type="date" value="' + (b && b.kind === 'once' && b.due_date ? b.due_date : todayISO()) + '"></div>' +
+        (monthly ? '' :
+          '<div class="field"><label class="field-label">' + t('bill.dueDate') + '</label><input class="input" id="m-bdate" type="date" value="' + (b && b.due_date ? b.due_date : todayISO()) + '"></div>') +
         '</div>' +
         '<div class="field"><label class="field-label">' + t('tx.category') + '</label><select class="input" id="m-bcat">' +
         CATS_EXPENSE.map(function (c) { return '<option value="' + c + '"' + (b && b.category === c ? ' selected' : '') + '>' + t(c) + '</option>'; }).join('') +
@@ -1288,35 +1306,25 @@
         '<div class="modal-actions">' +
         '<button class="btn btn-soft" data-action="close-modal">' + t('common.cancel') + '</button>' +
         '<button class="btn btn-primary" data-action="save-bill"' + (id ? ' data-id="' + id + '"' : '') + '>' + t('common.save') + '</button>' +
-        '</div>',
-      onOpen: function (m) {
-        const toggle = function () {
-          const once = m.querySelector('#m-bkind').value === 'once';
-          m.querySelector('#f-mbday').classList.toggle('hidden', once);
-          m.querySelector('#f-mbdate').classList.toggle('hidden', !once);
-        };
-        m.querySelector('#m-bkind').addEventListener('change', toggle);
-        toggle();
-      }
+        '</div>'
     });
   }
 
   async function saveBill(id) {
+    const b = id ? state.data.bills.find(function (x) { return x.id === id; }) : null;
+    const monthly = b && b.kind === 'monthly';
     const name = $('#m-bname').value.trim();
     const amount = parseAmount($('#m-bamount').value);
-    const kind = $('#m-bkind').value;
     const cat = $('#m-bcat').value;
     const bank = $('#m-bbank').value;
     if (!name || amount === null) { toast(t('imp.parseError'), 'err'); return; }
     let row;
-    if (kind === 'once') {
+    if (monthly) {
+      row = { name: name, amount: Math.abs(amount), kind: 'monthly', due_day: Number(b.due_day) || 1, due_date: null, category: cat, bank_id: bank || null, active: true };
+    } else {
       const date = $('#m-bdate').value;
       if (!date) { toast(t('imp.parseError'), 'err'); return; }
       row = { name: name, amount: Math.abs(amount), kind: 'once', due_day: null, due_date: date, category: cat, bank_id: bank || null, active: true };
-    } else {
-      const day = parseInt($('#m-bday').value, 10);
-      if (!day || day < 1 || day > 31) { toast(t('imp.parseError'), 'err'); return; }
-      row = { name: name, amount: Math.abs(amount), kind: 'monthly', due_day: day, due_date: null, category: cat, bank_id: bank || null, active: true };
     }
     const ok = await handleMutation(function () {
       if (id) return dbUpdate('bills', id, row);
