@@ -96,7 +96,9 @@
     merchFilter: { q: '', pendingOnly: false },
     imp: null,
     importing: false,
-    insightsOpen: false
+    insightsOpen: false,
+    bankRotTimer: null,
+    bankRotIdx: 0
   };
 
   function icon(name, cls) {
@@ -231,6 +233,7 @@
   }
 
   function renderView() {
+    stopBankRotation();
     const v = $('#view');
     v.classList.remove('view-enter');
     void v.offsetWidth;
@@ -372,13 +375,18 @@
     const y = now.getFullYear(), m = now.getMonth() + 1;
     const today = todayISO();
     const pending = {};
+    const dueByBank = {};
     (state.data.bills || []).forEach(function (b) {
       if (!b.active) return;
       const due = nextDueDate(b.due_day, now);
       const mk = monthKeyFromISO(due);
       const paid = (state.data.payments || []).some(function (p) { return p.bill_id === b.id && p.month === mk; });
       if (paid) return;
-      if (isSameMonth(due, y, m)) pending[due] = (pending[due] || 0) + (Number(b.amount) || 0);
+      if (isSameMonth(due, y, m)) {
+        pending[due] = (pending[due] || 0) + (Number(b.amount) || 0);
+        const key = b.bank_id || '';
+        dueByBank[key] = (dueByBank[key] || 0) + (Number(b.amount) || 0);
+      }
     });
     let dueMonth = 0, overdue = 0;
     Object.keys(pending).forEach(function (d) {
@@ -390,7 +398,7 @@
     const monthTx = state.data.tx.filter(function (t) { return isSameMonth(t.date, y, m); });
     const monthSpend = monthTx.filter(function (t) { return t.type === 'expense'; }).reduce(function (a, t) { return a + Math.abs(Number(t.amount) || 0); }, 0);
     const monthIncome = monthTx.filter(function (t) { return t.type === 'income'; }).reduce(function (a, t) { return a + Math.abs(Number(t.amount) || 0); }, 0);
-    return { cash: cash, totalDebt: totalDebt, dueMonth: dueMonth, overdue: overdue, monthSpend: monthSpend, monthIncome: monthIncome, y: y, m: m };
+    return { cash: cash, totalDebt: totalDebt, dueMonth: dueMonth, overdue: overdue, dueByBank: dueByBank, monthSpend: monthSpend, monthIncome: monthIncome, y: y, m: m };
   }
 
   function computeAlerts(st) {
@@ -501,9 +509,9 @@
       '</div></div>' +
 
       '<div class="stat-grid">' +
-      statCard('cash', t('stat.cash'), fmtMoney(st.cash, LANG), st.cash < 0 ? 'hot' : (st.cash > 0 ? 'good' : '')) +
       statCard('card', t('stat.debt'), fmtMoney(st.totalDebt, LANG), st.totalDebt > 0 ? 'warn' : 'good') +
       statCard('calendar', t('stat.dueMonth'), fmtMoney(st.dueMonth, LANG), st.dueMonth > 0 ? 'warn' : '') +
+      bankDueCard(st) +
       statCard('alert', t('stat.overdue'), fmtMoney(st.overdue, LANG), st.overdue > 0 ? 'hot' : '') +
       '</div>' +
 
@@ -574,6 +582,7 @@
     requestAnimationFrame(function () { drawHomeCharts(); });
     requestAnimationFrame(function () { animateRing(); });
     countUp($('#cash-count'), st.cash, function (v) { return fmtMoney(v, LANG); });
+    startBankRotation(st);
   }
 
   function statCard(ic, label, value, extra) {
@@ -581,6 +590,41 @@
       '<div class="stat-ico">' + icon(ic) + '</div>' +
       '<div class="stat-label">' + label + '</div>' +
       '<div class="stat-value">' + value + '</div></div>';
+  }
+
+  function stopBankRotation() {
+    if (state.bankRotTimer) { clearInterval(state.bankRotTimer); state.bankRotTimer = null; }
+    state.bankRotIdx = 0;
+  }
+
+  function bankDueCard(st) {
+    const banks = state.data.banks || [];
+    const first = banks.length ? banks[0] : null;
+    const label = first ? t('stat.dueMonth') + ' · ' + first.name : t('stat.dueMonth');
+    const value = first ? fmtMoney(Number(st.dueByBank[first.id] || 0), LANG) : fmtMoney(st.dueMonth, LANG);
+    return '<div class="stat" id="stat-bankdue">' +
+      '<div class="stat-ico">' + icon('calendar') + '</div>' +
+      '<div class="stat-label" id="bankdue-label">' + esc(label) + '</div>' +
+      '<div class="stat-value" id="bankdue-value">' + value + '</div></div>';
+  }
+
+  function startBankRotation(st) {
+    const banks = state.data.banks || [];
+    if (banks.length < 2) return;
+    const items = banks.map(function (b) {
+      return { name: b.name, value: Number(st.dueByBank[b.id] || 0) };
+    });
+    const tick = function () {
+      if (state.bankRotIdx >= items.length) state.bankRotIdx = 0;
+      const it = items[state.bankRotIdx];
+      const labelEl = $('#bankdue-label');
+      const valEl = $('#bankdue-value');
+      if (!labelEl || !valEl) { stopBankRotation(); return; }
+      labelEl.textContent = t('stat.dueMonth') + ' · ' + it.name;
+      valEl.textContent = fmtMoney(it.value, LANG);
+      state.bankRotIdx++;
+    };
+    state.bankRotTimer = setInterval(tick, 3000);
   }
 
   function quickTile(ic, label, action) {
