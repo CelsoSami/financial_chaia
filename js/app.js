@@ -453,14 +453,8 @@
     requestAnimationFrame(frame);
   }
 
-  function fmtSigned(v, lang) {
+function fmtSigned(v, lang) {
     return (v < 0 ? '-' : '+') + fmtMoney(Math.abs(v), lang);
-  }
-
-  function todayExpenses() {
-    const today = todayISO();
-    return state.data.tx.filter(function (t) { return t.type === 'expense' && t.date === today; })
-      .reduce(function (a, t) { return a + Math.abs(Number(t.amount) || 0); }, 0);
   }
 
   function monthStats() {
@@ -493,117 +487,40 @@
     const monthSpend = monthTx.filter(function (t) { return t.type === 'expense'; }).reduce(function (a, t) { return a + Math.abs(Number(t.amount) || 0); }, 0);
     const monthIncome = monthTx.filter(function (t) { return t.type === 'income'; }).reduce(function (a, t) { return a + Math.abs(Number(t.amount) || 0); }, 0);
     return { cash: cash, totalDebt: totalDebt, dueMonth: dueMonth, overdue: overdue, dueByBank: dueByBank, monthSpend: monthSpend, monthIncome: monthIncome, y: y, m: m };
-  }
-
-  function computeAlerts(st) {
-    const out = [];
-    const now = new Date();
-    const today = todayISO();
-    (state.data.bills || []).forEach(function (b) {
-      if (!b.active) return;
-      if ((b.type || 'exp') === 'inc') return;
-      const due = billDueDate(b, now);
-      const mk = monthKeyFromISO(due);
-      const paid = (state.data.payments || []).some(function (p) { return p.bill_id === b.id && p.month === mk; });
-      if (paid) return;
-      const name = b.name;
-      const d = diffDays(due, today);
-      const val = Number(b.amount) > 0 ? ' — ' + fmtMoney(b.amount, LANG) : '';
-      if (d < 0) out.push({ tone: 'danger', ic: 'alert', title: t('alert.overdue'), sub: name + val + ' — ' + fmtDate(due, LANG) });
-      else if (d === 0) out.push({ tone: 'danger', ic: 'alert', title: t('alert.dueToday'), sub: name + val });
-      else if (d === 1) out.push({ tone: 'warn', ic: 'calendar', title: t('alert.dueTomorrow'), sub: name + val });
-      else if (d <= 7) out.push({ tone: 'warn', ic: 'calendar', title: t('alert.dueSoon', { n: d }), sub: name + val + ' — ' + fmtDate(due, LANG) });
-    });
-    (state.data.banks || []).forEach(function (b) {
-      if (!b.invoice_day) return;
-      if (bankInvoicePaid(b)) return;
-      const due = nextDueDate(b.invoice_day, now);
-      const d = diffDays(due, today);
-      if (d >= -3 && d <= 3 && (Number(b.debt) > 0 || b.kind === 'credit')) {
-        out.push({
-          tone: d < 0 ? 'danger' : 'warn', ic: 'card',
-          title: t('alert.invoiceSoon') + ' · ' + b.name,
-          sub: (d < 0 ? t('alert.overdue') + ' — ' : '') + fmtDate(due, LANG) + (Number(b.debt) > 0 ? ' · ' + fmtMoney(b.debt, LANG) : '')
-        });
-      }
-    });
-    if (st.cash < 0) out.push({ tone: 'danger', ic: 'cash', title: t('alert.cashNegative'), sub: fmtMoney(st.cash, LANG) });
-    const budget = Number(state.data.settings.monthly_budget || 0);
-    const spentToday = todayExpenses();
-    if (budget > 0 && spentToday > budget / 30) out.push({ tone: 'warn', ic: 'target', title: t('alert.budgetExceeded'), sub: fmtMoney(spentToday, LANG) + ' / ' + fmtMoney(budget / 30, LANG) });
-    return out.slice(0, 6);
-  }
-
-  function getStreak() {
-    try { return JSON.parse(localStorage.getItem('fc_streak') || '{"date":"","count":0}'); } catch (e) { return { date: '', count: 0 }; }
-  }
-
-  function updateStreak() {
-    const budget = Number(state.data.settings.monthly_budget || 0);
-    const today = todayISO();
-    let s = getStreak();
-    if (budget <= 0) return s;
-    const goal = budget / 30;
-    const ok = todayExpenses() <= goal;
-    if (s.date === today) return s;
-    if (ok) {
-      const yest = new Date();
-      yest.setDate(yest.getDate() - 1);
-      const yISO = isoFromParts(yest.getFullYear(), yest.getMonth() + 1, yest.getDate());
-      s.count = s.date === yISO ? s.count + 1 : 1;
-      s.date = today;
-    } else {
-      s = { date: today, count: 0 };
-    }
-    localStorage.setItem('fc_streak', JSON.stringify(s));
-    return s;
-  }
-
-  function badgesEarned() {
-    const st = monthStats();
-    const earned = [];
-    if (state.data.tx.length) earned.push('first-tx');
-    if (state.data.tx.some(function (t) { return t.source === 'import' || t.source === 'pdf'; })) earned.push('first-import');
-    if (state.data.banks.length) earned.push('first-bank');
-    const streak = getStreak().count;
-    if (streak >= 3) earned.push('on-track');
-    if (state.data.banks.length && st.totalDebt === 0) earned.push('no-debt');
-    if (st.monthSpend > 0 && st.cash >= st.monthSpend * 6) earned.push('investor');
-    const aliased = (state.data.aliases || []).length;
-    if (aliased >= 3) earned.push('organizer');
-    return earned;
-  }
-
-  const BADGES = [
-    { id: 'first-tx', ic: 'tx' }, { id: 'first-import', ic: 'import' }, { id: 'first-bank', ic: 'bank' },
-    { id: 'on-track', ic: 'target' }, { id: 'no-debt', ic: 'shield' }, { id: 'investor', ic: 'invest' }, { id: 'organizer', ic: 'tag' }
-  ];
+}
 
   function renderHome() {
     const st = monthStats();
-    const alerts = computeAlerts(st);
     const budget = Number(state.data.settings.monthly_budget || 0);
-    const streak = updateStreak();
-    const earned = badgesEarned();
-    const insights = buildInsights({
-      tx: state.data.tx, banks: state.data.banks, bills: state.data.bills,
-      settings: state.data.settings, aliasesMap: state.aliasesMap
-    });
-    const hasData = state.data.tx.length > 0 || state.data.banks.length > 0;
+    const now = new Date();
+    const today = todayISO();
+    const y = now.getFullYear(), m = now.getMonth() + 1;
+    const rows = (state.data.bills || []).filter(function (b) {
+      if (!b.active) return false;
+      if ((b.type || 'exp') === 'inc') return false;
+      return true;
+    }).map(function (b) {
+      const due = billDueDate(b, now);
+      const paid = (state.data.payments || []).some(function (p) { return p.bill_id === b.id && p.month === monthKeyFromISO(due); });
+      return { b: b, due: due, paid: paid };
+    }).filter(function (r) { return isSameMonth(r.due, y, m); })
+      .sort(function (a, c) {
+        if (a.paid !== c.paid) return a.paid ? 1 : -1;
+        return String(a.due).localeCompare(String(c.due));
+      });
+    const unpaid = rows.reduce(function (a, r) { return a + (r.paid ? 0 : (Number(r.b.amount) || 0)); }, 0);
 
     const html =
       '<div class="hero">' +
       '<div class="hero-top">' +
       '<div><div class="hero-greet">' + t('hello', { name: state.user ? state.user.name || state.user.login : '' }) + '</div>' +
       '<div class="hero-name">Chaia Finance</div></div>' +
-      '<span class="badge soft">' + (LANG === 'en' ? 'BRL' : 'BRL') + '</span>' +
+      '<span class="badge soft">BRL</span>' +
       '</div>' +
       '<div class="hero-cash"><div class="hero-cash-label">' + t('stat.cash') + '</div>' +
       '<div class="hero-cash-value" id="cash-count">' + fmtMoney(st.cash, LANG) + '</div></div>' +
-      '<div class="hero-tags">' +
-      (budget > 0 ? '<span class="badge good">' + t('dash.budget') + ': ' + fmtMoneyCompact(budget, LANG) + '</span>' : '') +
-      '<span class="badge' + (streak.count > 0 ? ' good' : ' soft') + '">' + icon('target', 'mini') + ' ' + t('dash.streak') + ': ' + streak.count + '</span>' +
-      '</div></div>' +
+      (budget > 0 ? '<div class="hero-tags"><span class="badge good">' + icon('target', 'mini') + ' ' + t('dash.budget') + ': ' + fmtMoneyCompact(budget, LANG) + '</span></div>' : '') +
+      '</div>' +
 
       '<div class="stat-grid">' +
       statCard('card', t('stat.debt'), fmtMoney(st.totalDebt, LANG), st.totalDebt > 0 ? 'warn' : 'good', 'stat-debt', st.totalDebt > 0 ? t('dash.tapView') : t('dash.zeroDebt')) +
@@ -613,71 +530,30 @@
       '</div>' +
 
       '<div class="section-gap"></div>' +
-      (alerts.length ? '<div class="card"><div class="card-title">' + icon('alert') + t('dash.alerts') + '</div>' +
-        alerts.map(function (a) {
-          return '<div class="alert-row ' + a.tone + '">' + icon(a.ic) +
-            '<div><b>' + a.title + '</b><small>' + a.sub + '</small></div></div>';
-        }).join('') + '</div>' :
-        '<div class="card"><div class="card-title">' + icon('checkcircle') + t('dash.allGood') + '</div>' +
-        '<p style="color:var(--muted);font-size:13px">' + t('dash.allGoodSub') + '</p></div>') +
-
-      '<div class="section-gap"></div>' +
-      '<div class="quick-grid">' +
-      quickTile('plus', t('tx.add'), 'open-tx') +
-      quickTile('import', t('sheet.import'), 'go-import') +
-      quickTile('bank', t('bank.title'), 'go-banks') +
-      quickTile('bills', t('bill.title'), 'go-bills') +
-      quickTile('tag', t('mer.title'), 'go-merchants') +
-      quickTile('settings', t('set.title'), 'go-settings') +
+      '<div class="card">' +
+      '<div class="card-title">' + icon('bills') + t('dash.extract') + ' · ' + monthLabel(monthKeyFromISO(today), LANG) +
+      (unpaid > 0 ? '<span class="x-total">' + fmtMoney(unpaid, LANG) + '</span>' : '') +
       '</div>' +
-
-      '<div class="section-gap"></div>' +
-      (hasData ?
-        '<div class="card"><div class="card-title">' + icon('bank') + t('dash.bankList') + '</div>' + renderBankBalances() + '</div>' +
-        '<div class="section-gap"></div>' +
-        '<div class="card"><div class="card-title">' + icon('chart') + t('dash.flow') + '</div>' +
-        '<div class="chart-wrap" style="height:150px"><canvas id="flow-chart"></canvas></div></div>' +
-        '<div class="section-gap"></div>' +
-        '<div class="card"><div class="card-title">' + icon('target') + t('dash.categories') + '</div>' +
-        '<div class="chart-wrap"><canvas id="cat-chart"></canvas></div>' +
-        '<div class="legend" id="cat-legend"></div></div>' +
-        (budget > 0 ?
-          '<div class="section-gap"></div>' +
-          '<div class="card"><div class="card-title">' + icon('target') + t('dash.budget') + '</div>' +
-          '<div class="ring-wrap"><div class="ring"><svg width="96" height="96" viewBox="0 0 96 96">' +
-          '<circle cx="48" cy="48" r="40" fill="none" stroke="var(--card-2)" stroke-width="9"/>' +
-          '<circle id="ring-progress" cx="48" cy="48" r="40" fill="none" stroke="url(#ringgrad)" stroke-width="9" stroke-linecap="round" stroke-dasharray="251.2" stroke-dashoffset="251.2" style="transition:stroke-dashoffset 1s var(--ease)"/>' +
-          '<defs><linearGradient id="ringgrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#38bdf8"/></linearGradient></defs></svg>' +
-          '<div class="ring-val" id="ring-val">0%</div></div>' +
-          '<div class="ring-meta"><b>' + t('dash.spentToday') + '</b><br>' + fmtMoney(todayExpenses(), LANG) + ' ' + t('tx.of') + ' ' + fmtMoney(budget / 30, LANG) +
-          '<br><br><span style="color:var(--muted)">' + t('dash.streak') + '</span><br><b>' + streak.count + ' ' + t('dash.days') + '</b></div></div></div>' : '') +
-        '<div class="section-gap"></div>' :
-        '<div class="empty">' + icon('coin') + '<b>' + t('dash.noData') + '</b><p>' + t('dash.noDataHint') + '</p></div>' +
-        '<div class="section-gap"></div>') +
-
-      '<div class="card"><div class="card-title">' + icon('spark') + t('dash.insights') + '</div>' +
-      (insights.length ?
-        insights.slice(0, state.insightsOpen ? insights.length : 3).map(function (ins) {
-          return '<div class="insight-card"><div class="insight-ico ' + ins.tone + '">' + icon(ins.icon) + '</div>' +
-            '<div><div class="insight-title">' + ins.title + '</div><div class="insight-body">' + ins.body + '</div></div></div>';
+      (rows.length ?
+        rows.map(function (r) {
+          const d = diffDays(r.due, today);
+          const status = r.paid ? 'paid' : d < 0 ? 'overdue' : 'pending';
+          const statusKey = r.paid ? t('bill.paid') : (d < 0 ? t('bill.overdue') : t('bill.pending'));
+          const cat = catName(r.b.category);
+          return '<div class="list-row">' +
+            '<span class="hb-dot ' + status + '"></span>' +
+            '<div class="row-main"><div class="row-title">' + esc(r.b.name) + '</div>' +
+            '<div class="row-sub">' + (cat ? cat + ' · ' : '') + fmtDate(r.due, LANG) + '</div></div>' +
+            '<div class="row-end"><div class="row-amount">' + fmtMoney(r.b.amount, LANG) + '</div>' +
+            '<span class="bill-status ' + status + (status === 'paid' ? '">' + icon('check') : '">') + statusKey + '</span>' +
+            '</div></div>';
         }).join('') +
-        (insights.length > 3 ? '<button class="btn btn-sm btn-soft btn-block" data-action="toggle-insights">' +
-          (state.insightsOpen ? t('dash.less') : t('dash.more')) + '</button>' : '') :
-        '<p style="color:var(--muted);font-size:13px">' + t('ins.nodataBody') + '</p>') +
-      '</div>' +
-
-      '<div class="section-gap"></div>' +
-      '<div class="card"><div class="card-title">' + icon('coin') + t('dash.badges') + '</div>' +
-      '<div class="badge-row">' +
-      BADGES.map(function (b) {
-        const got = earned.indexOf(b.id) > -1;
-        return '<span class="badge-chip' + (got ? ' got' : '') + '">' + icon(b.ic) + t('badge.' + b.id) + '</span>';
-      }).join('') +
-      '</div></div>';
+        (unpaid > 0 ? '<div class="hb-total"><span>' + t('dash.extractTotal') + '</span><b>' + fmtMoney(unpaid, LANG) + '</b></div>' : '') :
+        '<div class="empty">' + icon('bills') + '<b>' + t('dash.noBillsMonth') + '</b><p>' + t('dash.noBillsMonthHint') + '</p></div>') +
+      '<button class="btn btn-soft btn-block" style="margin-top:12px" data-action="go" data-view="bills">' + t('dash.viewAll') + '</button>' +
+      '</div>';
 
     $('#view').innerHTML = html;
-    requestAnimationFrame(function () { drawHomeCharts(); });
-    requestAnimationFrame(function () { animateRing(); });
     countUp($('#cash-count'), st.cash, function (v) { return fmtMoney(v, LANG); });
     countUp($('#stat-debt'), st.totalDebt, function (v) { return fmtMoney(v, LANG); });
     countUp($('#stat-due'), st.dueMonth, function (v) { return fmtMoney(v, LANG); });
@@ -745,117 +621,13 @@
     state.bankRotTimer = setInterval(tick, 3000);
   }
 
-  function quickTile(ic, label, action) {
-    return '<button class="quick-tile" data-action="' + action + '">' + icon(ic) + '<span>' + label + '</span></button>';
-  }
-
-  function bankKindLabel(kind) {
+function bankKindLabel(kind) {
     if (kind === 'credit') return t('bank.credit');
     if (kind === 'invest') return t('bank.invest');
     return t('bank.debit');
   }
 
-  function renderBankBalances() {
-    const banks = state.data.banks || [];
-    if (!banks.length) return '<p style="color:var(--muted);font-size:13px">' + t('bank.noBanksHint') + '</p>';
-    return banks.map(function (b) {
-      const debt = Number(b.debt) || 0;
-      const bal = Number(b.balance) || 0;
-      const v = b.kind === 'credit' ? debt : bal;
-      return '<div class="list-row">' +
-        '<span class="bank-dot" style="background:' + (b.color || '#10b981') + '">' + esc(b.name.slice(0, 1).toUpperCase()) + '</span>' +
-        '<div class="row-main"><div class="row-title">' + esc(b.name) + '</div>' +
-        '<div class="row-sub">' + bankKindLabel(b.kind) +
-        (b.invoice_day ? ' · ' + t('bank.invoiceOn', { d: b.invoice_day }) : '') + '</div></div>' +
-        '<div class="row-end"><div class="row-amount' + (b.kind === 'credit' ? (debt > 0 ? '' : ' inc') : (bal < 0 ? '' : ' inc')) + '">' +
-        fmtMoney(b.kind === 'credit' ? -debt : bal, LANG) + '</div>' +
-        '<small style="color:var(--faint);font-size:11px">' + (b.kind === 'credit' ? t('bank.debtLabel') : t('bank.balanceLabel')) + '</small></div></div>';
-    }).join('');
-  }
-
-  function animateRing() {
-    const rp = $('#ring-progress');
-    if (!rp) return;
-    const budget = Number(state.data.settings.monthly_budget || 0);
-    const goal = budget / 30;
-    const spent = todayExpenses();
-    const pct = goal > 0 ? Math.min(1, spent / goal) : 0;
-    setTimeout(function () {
-      rp.setAttribute('stroke-dashoffset', String(251.2 - 251.2 * pct));
-      const rv = $('#ring-val');
-      if (rv) rv.innerHTML = Math.round(pct * 100) + '%<small>' + t('dash.ofDay') + '</small>';
-    }, 60);
-  }
-
-  function flowSeries() {
-    const now = new Date();
-    const out = [];
-    const labels = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const y = d.getFullYear(), m = d.getMonth() + 1;
-      const inM = state.data.tx.filter(function (t) { return isSameMonth(t.date, y, m) && t.type === 'income'; }).reduce(function (a, t) { return a + Math.abs(Number(t.amount) || 0); }, 0);
-      const exM = state.data.tx.filter(function (t) { return isSameMonth(t.date, y, m) && t.type === 'expense'; }).reduce(function (a, t) { return a + Math.abs(Number(t.amount) || 0); }, 0);
-      out.push(inM - exM);
-      try {
-        labels.push(d.toLocaleDateString(LANG === 'en' ? 'en-US' : 'pt-BR', { month: 'short' }).replace('.', ''));
-      } catch (e) { labels.push(String(m)); }
-    }
-    return { values: out, labels: labels };
-  }
-
-  function categorySlices() {
-    const now = new Date();
-    const y = now.getFullYear(), m = now.getMonth() + 1;
-    const map = {};
-    state.data.tx.forEach(function (t) {
-      if (t.type !== 'expense' || !isSameMonth(t.date, y, m)) return;
-      const c = t.category || 'cat.other';
-      map[c] = (map[c] || 0) + Math.abs(Number(t.amount) || 0);
-    });
-    const arr = Object.keys(map).map(function (k) { return { cat: k, v: map[k] }; }).sort(function (a, b) { return b.v - a.v; });
-    const PALETTE = ['#34d399', '#38bdf8', '#a78bfa', '#fbbf24', '#fb7185', '#94a3b8'];
-    const top = arr.slice(0, 5);
-    const rest = arr.slice(5).reduce(function (a, c) { return a + c.v; }, 0);
-    const slices = top.map(function (c, i) { return { value: c.v, color: PALETTE[i], cat: c.cat }; });
-    if (rest > 0) slices.push({ value: rest, color: PALETTE[5], cat: 'cat.other' });
-    return slices;
-  }
-
-  function drawHomeCharts() {
-    const fc = $('#flow-chart');
-    if (fc) {
-      const s = flowSeries();
-      drawBars(fc, s.values, function (i, v) { return v >= 0 ? '#34d399' : '#fb7185'; }, true);
-      fc.parentElement.setAttribute('data-labels', JSON.stringify(s.labels));
-      const cv = fc.getBoundingClientRect();
-      const ctx = fc.getContext('2d');
-      const dpr = devicePixelRatio || 1;
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '600 10px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      const stepX = cv.width / s.labels.length;
-      s.labels.forEach(function (lb, i) {
-        ctx.fillText(lb, stepX * i + stepX / 2, cv.height - 2);
-      });
-    }
-    const cc = $('#cat-chart');
-    if (cc) {
-      const slices = categorySlices();
-      const total = slices.reduce(function (a, s) { return a + s.value; }, 0);
-      drawDonut(cc, slices, fmtMoneyCompact(total, LANG), t('dash.categoriesSub'));
-      const legend = $('#cat-legend');
-      if (legend) {
-        legend.innerHTML = slices.map(function (s) {
-          return '<div class="legend-item"><span class="legend-dot" style="background:' + s.color + '"></span>' +
-            '<span>' + catName(s.cat) + '</span><b>' + fmtMoney(s.value, LANG) + '</b>' +
-            '<span style="width:44px;text-align:right;flex:none">' + (total ? Math.round(s.value / total * 100) : 0) + '%</span></div>';
-        }).join('');
-      }
-    }
-  }
-
-  function renderTx() {
+function renderTx() {
     const banks = state.data.banks || [];
     const months = [];
     state.data.tx.forEach(function (t) {
@@ -2151,8 +1923,8 @@
     if (type) { state.txFilters.type = type.getAttribute('data-value'); renderTx(); }
   });
 
-  window.addEventListener('resize', debounce(function () {
-    if (state.view === 'home') drawHomeCharts();
+window.addEventListener('resize', debounce(function () {
+    if (state.view === 'home') renderView();
   }, 200));
 
   async function boot() {

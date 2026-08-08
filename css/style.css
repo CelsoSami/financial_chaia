@@ -485,6 +485,19 @@ html[data-theme="light"] .hero{color:#04261b;background:linear-gradient(135deg,#
 .quick-tile:active{transform:scale(.95)}
 .quick-tile svg{width:21px;height:21px;fill:var(--accent)}
 
+/* ---------- HOME EXTRATO ---------- */
+.x-total{margin-left:auto;font-size:13.5px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--accent)}
+.hb-dot{width:9px;height:9px;border-radius:50%;flex:none}
+.hb-dot.paid{background:var(--good);box-shadow:0 0 7px color-mix(in srgb,var(--good) 55%,transparent)}
+.hb-dot.pending{background:var(--accent);box-shadow:0 0 7px color-mix(in srgb,var(--accent) 50%,transparent)}
+.hb-dot.overdue{background:var(--danger);animation:statPulse 1.8s ease-out infinite}
+.hb-total{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-top:8px;padding:12px 4px 2px;border-top:1px solid var(--border);
+  font-size:12.5px;font-weight:600;color:var(--muted);
+}
+.hb-total b{color:var(--text);font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
+
 /* ---------- TRANSACTIONS ---------- */
 .tx-month{margin-top:16px}
 .tx-month:first-child{margin-top:0}
@@ -591,4 +604,19 @@ html[data-theme="light"] .hero{color:#04261b;background:linear-gradient(135deg,#
 ::-webkit-scrollbar{width:9px;height:9px}
 ::-webkit-scrollbar-thumb{background:var(--card-2);border-radius:99px}
 ::-webkit-scrollbar-track{background:transparent}
+@media(max-width:420px){
+  .view{padding:12px 12px calc(var(--nav-h) + 28px)}
+  .hero{padding:16px 14px;border-radius:18px;margin-bottom:10px}
+  .hero-cash-value{font-size:28px}
+  .hero-tags{margin-top:12px}
+  .stat-grid{gap:8px}
+  .stat{padding:12px;border-radius:16px;gap:10px}
+  .stat-ico{width:33px;height:33px;border-radius:11px}
+  .stat-ico svg{width:17px;height:17px}
+  .stat-value{font-size:16.5px}
+  .stat-sub{gap:4px}
+  .list-row{gap:10px;padding:10px 2px}
+  .row-title{font-size:13.5px}
+}
+
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
