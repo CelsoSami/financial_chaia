@@ -377,7 +377,7 @@
         if (diffDays(due, today) > 7) continue;
         await dbInsert('bills', {
           name: t.name,
-          amount: t.kind === 'fixed' && t.amount != null ? Math.abs(Number(t.amount)) : 0,
+          amount: (t.kind === 'fixed' || t.kind === 'cccomp') && t.amount != null ? Math.abs(Number(t.amount)) : 0,
           kind: 'monthly',
           type: t.type === 'inc' ? 'inc' : 'exp',
           due_day: Number(t.due_day) || 1,
@@ -1167,6 +1167,38 @@
     const list = (state.data.templates || []).filter(function (t) {
       return t.active && ((t.type || 'exp') === 'inc') === (seg === 'income');
     });
+    const now = new Date();
+    const today = todayISO();
+    const ccbills = seg === 'bills' ? (state.data.bills || []).filter(function (b) {
+      if (!b.active || b.kind !== 'ccbill' || String(b.due_date) < today) return false;
+      const mk = monthKeyFromISO(billDueDate(b, now));
+      return !(state.data.payments || []).some(function (p) { return p.bill_id === b.id && p.month === mk; });
+    }) : [];
+    const rows = list.map(function (tp) {
+      const income = (tp.type || 'exp') === 'inc';
+      const fixed = tp.kind === 'fixed' && tp.amount != null;
+      const comp = tp.kind === 'cccomp';
+      const amt = (fixed || comp) ? ' · ' + fmtMoney(tp.amount, LANG) : '';
+      return '<div class="list-row">' +
+        '<span class="row-ico' + (income ? ' inc' : '') + '">' + icon(comp ? 'card' : (income ? 'income' : 'calendar')) + '</span>' +
+        '<div class="row-main"><div class="row-title">' + esc(tp.name) + '</div>' +
+        '<div class="row-sub">' + (income ? t('tmpl.incomeDayLabel', { d: Number(tp.due_day) || 1 }) : t('tmpl.dayLabel', { d: Number(tp.due_day) || 1 })) +
+        amt + (tp.bank_id ? ' · ' + esc(bankName(tp.bank_id)) : '') + '</div></div>' +
+        '<span class="badge ' + (income ? 'good' : (comp ? 'soft' : (fixed ? 'good' : 'soft'))) + '">' +
+        (income ? t('tmpl.incomeFixed') : comp ? t('tmpl.cccompBadge') : fixed ? t('tmpl.fixed') : t('tmpl.variable')) + '</span>' +
+        '<button class="row-action" data-action="edit-tmpl" data-id="' + tp.id + '">' + icon('edit') + '</button>' +
+        '</div>';
+    }).concat(ccbills.map(function (b) {
+      const due = billDueDate(b, now);
+      return '<div class="list-row">' +
+        '<span class="row-ico exp">' + icon('card') + '</span>' +
+        '<div class="row-main"><div class="row-title">' + esc(b.name) + '</div>' +
+        '<div class="row-sub">' + esc(bankName(b.bank_id)) + ' · ' + t('bill.nextDue', { d: fmtDate(due, LANG) }) + ' · ' + fmtMoney(b.amount, LANG) + '</div></div>' +
+        '<span class="badge soft">' + t('tmpl.ccbillBadge') + '</span>' +
+        '<button class="row-action" data-action="edit-bill" data-id="' + b.id + '">' + icon('edit') + '</button>' +
+        '<button class="row-action" data-action="del-bill" data-id="' + b.id + '">' + icon('trash') + '</button>' +
+        '</div>';
+    }));
     const html =
       '<div class="seg" style="margin-bottom:14px">' +
       '<button class="seg-btn' + (seg === 'bills' ? ' active' : '') + '" data-action="tmpl-seg" data-seg="bills">' + t('tmpl.segBills') + '</button>' +
@@ -1174,21 +1206,8 @@
       '</div>' +
       '<p style="color:var(--muted);font-size:13.5px;margin-bottom:12px">' + (seg === 'income' ? t('tmpl.subtitleIncome') : t('tmpl.subtitle')) + '</p>' +
       '<button class="btn btn-dash btn-block" data-action="open-tmpl" data-seg="' + seg + '" style="margin-bottom:12px">' + icon('plus') + (seg === 'income' ? t('tmpl.addIncome') : t('tmpl.add')) + '</button>' +
-      (list.length ?
-        '<div class="card" style="padding:6px 14px">' + list.map(function (tp) {
-          const income = (tp.type || 'exp') === 'inc';
-          const fixed = tp.kind === 'fixed' && tp.amount != null;
-          return '<div class="list-row">' +
-            '<span class="row-ico' + (income ? ' inc' : '') + '">' + icon(income ? 'income' : 'calendar') + '</span>' +
-            '<div class="row-main"><div class="row-title">' + esc(tp.name) + '</div>' +
-            '<div class="row-sub">' + (income ? t('tmpl.incomeDayLabel', { d: Number(tp.due_day) || 1 }) : t('tmpl.dayLabel', { d: Number(tp.due_day) || 1 })) +
-            (fixed ? ' · ' + fmtMoney(tp.amount, LANG) : '') +
-            (tp.bank_id ? ' · ' + esc(bankName(tp.bank_id)) : '') + '</div></div>' +
-            '<span class="badge ' + (income ? 'good' : (fixed ? 'good' : 'soft')) + '">' +
-            (income ? t('tmpl.incomeFixed') : (fixed ? t('tmpl.fixed') : t('tmpl.variable'))) + '</span>' +
-            '<button class="row-action" data-action="edit-tmpl" data-id="' + tp.id + '">' + icon('edit') + '</button>' +
-            '</div>';
-        }).join('') + '</div>' :
+      (rows.length ?
+        '<div class="card" style="padding:6px 14px">' + rows.join('') + '</div>' :
         '<div class="empty">' + icon(seg === 'income' ? 'income' : 'calendar') + '<b>' + (seg === 'income' ? t('tmpl.emptyIncome') : t('tmpl.empty')) + '</b><p>' + (seg === 'income' ? t('tmpl.emptyIncomeHint') : t('tmpl.emptyHint')) + '</p></div>');
     $('#view').innerHTML = html;
   }
@@ -1196,29 +1215,33 @@
   function openTemplateModal(id, seg) {
     const tp = id ? state.data.templates.find(function (x) { return x.id === id; }) : null;
     const income = tp ? (tp.type || 'exp') === 'inc' : (seg || state.tmplSeg) === 'income';
-    const defKind = tp ? (tp.kind === 'variable' ? 'variable' : 'fixed') : 'fixed';
+    const defKind = tp ? (income ? (tp.kind === 'once' ? 'once' : 'fixed') : (tp.kind === 'variable' || tp.kind === 'cccomp' ? tp.kind : 'fixed')) : 'fixed';
     const defAmount = tp && tp.amount != null ? String(tp.amount).replace('.', ',') : '';
+    const banks = state.data.banks || [];
+    const cards = banks.filter(function (x) { return x.invoice_day; });
+    const allOpts = '<option value="">—</option>' + banks.map(function (x) { return '<option value="' + x.id + '"' + (tp && tp.bank_id === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('');
+    const cardOpts = cards.map(function (x) { return '<option value="' + x.id + '"' + (tp && tp.bank_id === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('');
     openModal({
       title: tp ? (income ? t('tmpl.editIncome') : t('tmpl.edit')) : (income ? t('tmpl.addIncome') : t('tmpl.add')),
       body:
         '<input type="hidden" id="m-tseg" value="' + (income ? 'inc' : 'exp') + '">' +
-        '<div class="field"><label class="field-label">' + t('tmpl.name') + '</label><input class="input" id="m-tname" value="' + esc(tp ? tp.name : '') + '" placeholder="' + esc(t('tmpl.name')) + '"></div>' +
+        '<div class="field" id="f-tname"><label class="field-label">' + (income ? t('tmpl.name') : t('tmpl.name')) + '</label><input class="input" id="m-tname" value="' + esc(tp ? tp.name : '') + '" placeholder="' + esc(t('tmpl.name')) + '"></div>' +
         '<div class="field"><label class="field-label">' + t('tmpl.type') + '</label><select class="input" id="m-tkind">' +
         (income ?
           '<option value="fixed"' + (defKind === 'fixed' ? ' selected' : '') + '>' + t('tmpl.incomeFixed') + '</option>' +
           '<option value="once"' + (defKind === 'once' ? ' selected' : '') + '>' + t('tmpl.incomeOnce') + '</option>' :
           '<option value="fixed"' + (defKind === 'fixed' ? ' selected' : '') + '>' + t('tmpl.fixed') + '</option>' +
-          '<option value="variable"' + (defKind === 'variable' ? ' selected' : '') + '>' + t('tmpl.variable') + '</option>') +
+          '<option value="variable"' + (defKind === 'variable' ? ' selected' : '') + '>' + t('tmpl.variable') + '</option>' +
+          '<option value="cccomp"' + (defKind === 'cccomp' ? ' selected' : '') + '>' + t('tmpl.kindComposition') + '</option>' +
+          '<option value="ccbill"' + (defKind === 'ccbill' ? ' selected' : '') + '>' + t('tmpl.kindCardBill') + '</option>') +
         '</select></div>' +
-        '<div class="field" id="f-tamount"><label class="field-label">' + t('tmpl.amount') + '</label><input class="input" id="m-tamount" inputmode="decimal" value="' + esc(defAmount) + '">' +
-        '<small style="color:var(--faint);font-size:11.5px">' + (income ? t('tmpl.incAmountHint') : t('tmpl.amountHint')) + '</small></div>' +
+        '<div class="field" id="f-tamount"><label class="field-label" id="f-tamount-label">' + t('tmpl.amount') + '</label><input class="input" id="m-tamount" inputmode="decimal" value="' + esc(defAmount) + '">' +
+        '<small id="f-tamount-hint" style="color:var(--faint);font-size:11.5px">' + t('tmpl.amountHint') + '</small></div>' +
+        '<div class="field" id="f-cccalc" style="display:none;padding:10px 12px;background:var(--card2,#0f172a);border-radius:10px"></div>' +
         '<div class="field" id="f-tcat"><label class="field-label">' + t('tx.category') + '</label><select class="input" id="m-tcat">' +
         sortedCats(income ? CATS_INCOME : CATS_EXPENSE).map(function (c) { return '<option value="' + c + '"' + (tp && tp.category === c ? ' selected' : '') + '>' + t(c) + '</option>'; }).join('') +
         '</select></div>' +
-        '<div class="field" id="f-tbank"><label class="field-label">' + t('tx.bank') + '</label><select class="input" id="m-tbank">' +
-        '<option value="">—</option>' +
-        state.data.banks.map(function (x) { return '<option value="' + x.id + '"' + (tp && tp.bank_id === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') +
-        '</select></div>' +
+        '<div class="field" id="f-tbank"><label class="field-label" id="f-tbank-label">' + t('tx.bank') + '</label><select class="input" id="m-tbank">' + allOpts + '</select></div>' +
         '<div class="field" id="f-tday"><label class="field-label">' + (income ? t('tmpl.incomeDueDay') : t('tmpl.dueDay')) + '</label><input class="input" id="m-tday" type="number" min="1" max="31" value="' + (tp ? (Number(tp.due_day) || 1) : 5) + '"></div>' +
         '<div class="field hidden" id="f-tdate"><label class="field-label">' + t('tmpl.incomeDueDate') + '</label><input class="input" id="m-tdate" type="date" value="' + todayISO() + '"></div>' +
         '<div class="modal-actions">' +
@@ -1226,17 +1249,60 @@
         '<button class="btn btn-primary" data-action="save-tmpl"' + (id ? ' data-id="' + id + '"' : '') + '>' + t('common.save') + '</button>' +
         '</div>',
       onOpen: function (m) {
+        const bankSel = m.querySelector('#m-tbank');
+        const calcCc = function () {
+          const bankId = bankSel.value;
+          const amt = parseAmount(m.querySelector('#m-tamount').value);
+          const subs = (state.data.templates || []).filter(function (x) { return x.active && x.kind === 'cccomp' && x.bank_id === bankId; })
+            .reduce(function (a, x) { return a + (Number(x.amount) || 0); }, 0);
+          const eff = Math.max(0, (amt == null ? 0 : amt) - subs);
+          m.querySelector('#f-cccalc').innerHTML = '<small style="color:var(--faint);font-size:11.5px">' + t('tmpl.ccbillHint') + '</small>' +
+            '<div style="margin-top:8px;font-size:13px">' + t('tmpl.ccbillSubs') + ': <b>' + fmtMoney(subs, LANG) + '</b><br>' +
+            t('tmpl.ccbillEffective') + ': <b>' + fmtMoney(eff, LANG) + '</b></div>';
+        };
         const toggle = function () {
-          const fixed = m.querySelector('#m-tkind').value === 'fixed';
+          const kind = m.querySelector('#m-tkind').value;
           const isInc = m.querySelector('#m-tseg').value === 'inc';
-          const showVals = fixed || isInc;
-          ['#f-tamount', '#f-tcat', '#f-tbank'].forEach(function (sel) {
-            m.querySelector(sel).classList.toggle('hidden', !showVals);
-          });
-          m.querySelector('#f-tday').classList.toggle('hidden', isInc && !fixed);
-          m.querySelector('#f-tdate').classList.toggle('hidden', !(isInc && !fixed));
+          if (isInc) {
+            const fixed = kind === 'fixed';
+            ['#f-tamount', '#f-tcat', '#f-tbank'].forEach(function (sel) {
+              m.querySelector(sel).classList.toggle('hidden', false);
+            });
+            m.querySelector('#f-tday').classList.toggle('hidden', isInc && !fixed);
+            m.querySelector('#f-tdate').classList.toggle('hidden', !(isInc && !fixed));
+            m.querySelector('#f-cccalc').style.display = 'none';
+            m.querySelector('#f-tamount-hint').style.display = '';
+            m.querySelector('#f-tamount-hint').textContent = t('tmpl.incAmountHint');
+            return;
+          }
+          m.querySelector('#f-tname').classList.toggle('hidden', kind === 'ccbill');
+          m.querySelector('#f-tamount').classList.toggle('hidden', kind === 'variable');
+          m.querySelector('#f-tcat').classList.toggle('hidden', kind === 'ccbill');
+          m.querySelector('#f-tday').classList.toggle('hidden', kind === 'cccomp' || kind === 'ccbill');
+          m.querySelector('#f-tbank-label').textContent = kind === 'ccbill' ? t('tmpl.ccbillBank') : t('tx.bank');
+          m.querySelector('#f-tamount-label').textContent = kind === 'ccbill' ? t('tmpl.ccbillAmount') : t('tmpl.amount');
+          const hint = m.querySelector('#f-tamount-hint');
+          const calc = m.querySelector('#f-cccalc');
+          if (kind === 'ccbill') {
+            hint.style.display = 'none';
+            calc.style.display = 'block';
+            bankSel.innerHTML = cardOpts;
+            calcCc();
+          } else {
+            hint.style.display = '';
+            hint.textContent = kind === 'cccomp' ? t('tmpl.cccompHint') : t('tmpl.amountHint');
+            calc.style.display = 'none';
+            bankSel.innerHTML = allOpts;
+            if (kind === 'cccomp' && !bankSel.value) bankSel.value = (cards.length ? cards[0].id : (banks.length ? banks[0].id : ''));
+          }
         };
         m.querySelector('#m-tkind').addEventListener('change', toggle);
+        bankSel.addEventListener('change', function () {
+          if (m.querySelector('#m-tkind').value === 'ccbill') calcCc();
+        });
+        m.querySelector('#m-tamount').addEventListener('input', function () {
+          if (m.querySelector('#m-tkind').value === 'ccbill') calcCc();
+        });
         toggle();
       }
     });
@@ -1250,7 +1316,7 @@
     const cat = $('#m-tcat').value;
     const bank = $('#m-tbank').value;
     let amount = null;
-    if (kind === 'fixed' || (seg === 'inc' && kind === 'once')) {
+    if (kind === 'fixed' || kind === 'cccomp' || kind === 'ccbill' || (seg === 'inc' && kind === 'once')) {
       const a = parseAmount($('#m-tamount').value);
       if (a === null) { toast(t('imp.parseError'), 'err'); return; }
       amount = Math.abs(a);
@@ -1267,8 +1333,31 @@
       if (ok) { closeModal(); toast(t('tmpl.savedIncome'), 'ok'); go('bills'); }
       return;
     }
-    const day = parseInt($('#m-tday').value, 10);
-    if (!name || !day || day < 1 || day > 31) { toast(t('imp.parseError'), 'err'); return; }
+    if (seg === 'exp' && kind === 'ccbill') {
+      const card = (state.data.banks || []).find(function (x) { return x.id === bank && x.invoice_day; });
+      if (!card || amount === null || amount <= 0) { toast(t('imp.parseError'), 'err'); return; }
+      const subs = (state.data.templates || []).filter(function (x) { return x.active && x.kind === 'cccomp' && x.bank_id === bank; })
+        .reduce(function (s, x) { return s + (Number(x.amount) || 0); }, 0);
+      const eff = Math.max(0, amount - subs);
+      const ok = await handleMutation(function () {
+        return dbInsert('bills', {
+          name: t('tmpl.ccbillName', { bank: card.name }), amount: eff, kind: 'ccbill', due_day: null,
+          due_date: nextDueDate(card.invoice_day, new Date()),
+          category: 'cat.card', bank_id: bank, active: true, type: 'exp', template_id: null
+        });
+      });
+      if (ok) { closeModal(); toast(t('tmpl.savedCcbill'), 'ok'); }
+      return;
+    }
+    let day;
+    if (kind === 'cccomp') {
+      const bankRow = (state.data.banks || []).find(function (x) { return x.id === bank; });
+      if (!name || !bank || amount === null || amount <= 0) { toast(t('imp.parseError'), 'err'); return; }
+      day = (bankRow && bankRow.invoice_day) ? Number(bankRow.invoice_day) : 1;
+    } else {
+      day = parseInt($('#m-tday').value, 10);
+      if (!name || !day || day < 1 || day > 31) { toast(t('imp.parseError'), 'err'); return; }
+    }
     const row = { name: name, kind: kind, amount: amount, due_day: day, category: cat || null, bank_id: bank || null, active: true, type: seg };
     const ok = await handleMutation(function () {
       if (id) return dbUpdate('bill_templates', id, row);
@@ -1334,10 +1423,16 @@
     if (state.billsView === 'statement') { renderStatement(); return; }
     const banks = (state.data.banks || []).filter(function (b) { return b.invoice_day; });
     const all = (state.data.bills || []).filter(function (b) { return b.active; });
-    const incBills = all.filter(function (b) { return (b.type || 'exp') === 'inc'; });
-    const bills = all.filter(function (b) { return (b.type || 'exp') !== 'inc'; });
     const now = new Date();
     const today = todayISO();
+    const incBills = all.filter(function (b) { return (b.type || 'exp') === 'inc'; });
+    const bills = all.filter(function (b) {
+      if ((b.type || 'exp') === 'inc') return false;
+      if (b.kind === 'ccbill' && (state.data.payments || []).some(function (p) {
+        return p.bill_id === b.id && p.month === monthKeyFromISO(billDueDate(b, now));
+      })) return false;
+      return true;
+    });
     const html =
       billsSegHtml() +
       '<button class="btn btn-dash btn-block" data-action="open-bill" style="margin-bottom:12px">' + icon('plus') + t('bill.add') + '</button>' +
@@ -1388,9 +1483,9 @@
     return '<div class="card"><div class="list-row" style="padding:0 0 10px;border:0">' +
       '<span class="row-ico ' + (status === 'overdue' ? 'exp' : status === 'paid' ? 'inc' : '') + '">' + icon(catIconKey(b.category || 'cat.other')) + '</span>' +
       '<div class="row-main"><div class="row-title">' + esc(b.name) + '</div>' +
-      '<div class="row-sub">' + catName(b.category) + ' · ' +
+      '<div class="row-sub">' + (b.kind === 'ccbill' ? esc(bankName(b.bank_id)) + ' · ' : '') + catName(b.category) + ' · ' +
       (b.kind === 'once' ? t('bill.onceDate', { d: fmtDate(due, LANG) }) : t('bill.nextDue', { d: fmtDate(due, LANG) })) + '</div></div>' +
-      '<div class="row-end"><div class="row-amount' + (inc ? ' inc' : '') + '">' + (inc ? '+' : '') + fmtMoney(b.amount, LANG) + '<small style="color:var(--faint)">' + (b.kind === 'once' ? t('bill.once') : t('bill.monthly')) + '</small></div>' +
+      '<div class="row-end"><div class="row-amount' + (inc ? ' inc' : '') + '">' + (inc ? '+' : '') + fmtMoney(b.amount, LANG) + '<small style="color:var(--faint)">' + (b.kind === 'once' ? t('bill.once') : b.kind === 'ccbill' ? t('bill.ccbillShort') : t('bill.monthly')) + '</small></div>' +
       '<span class="bill-status ' + status + '">' + (status === 'paid' ? icon('check') : '') + statusKey + '</span></div>' +
       '</div>' +
       '<div class="row-actions">' +
@@ -1448,7 +1543,7 @@
     } else {
       const date = $('#m-bdate').value;
       if (!date) { toast(t('imp.parseError'), 'err'); return; }
-      row = { name: name, amount: Math.abs(amount), kind: 'once', due_day: null, due_date: date, category: cat, bank_id: bank || null, active: true };
+      row = { name: name, amount: Math.abs(amount), kind: b && b.kind === 'ccbill' ? 'ccbill' : 'once', due_day: null, due_date: date, category: cat, bank_id: bank || null, active: true };
     }
     const ok = await handleMutation(function () {
       if (id) return dbUpdate('bills', id, row);

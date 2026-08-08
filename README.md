@@ -7,8 +7,8 @@ Aplicativo web de **controle financeiro familiar**, feito para usar no celular. 
 - **Acesso privado**: somente usuÃ¡rios autorizados da famÃ­lia entram (cada um com sua prÃ³pria conta)
 - **Dashboard de saÃºde financeira**: saldo em caixa, dÃ­vida total, vencimentos do mÃªs (por banco), vencidos em aberto e saldo por banco
 - **Bancos**: contas, cartÃµes de crÃ©dito e investimentos, com saldo, dÃ­vida e dia da fatura â€” na aba **Saldos**, cada cartÃ£o tem **Faturas de cartÃ£o** com botÃ£o **Marcar como pago** (pode desfazer depois); faturas pagas nÃ£o geram alertas
-- **Registro de Contas**: aba **Registros** com as contas que se repetem todo mÃªs (Luz, Aluguel...) â€” com **valor fixo** (valor, categoria e banco) ou sem valor definido. A mesma aba tem **Recebimentos**: rendas fixas do mÃªs (SalÃ¡rio, aluguÃ©is recebidos...) e recebimentos pontuais com data. **7 dias antes do vencimento**, cada conta vira um lanÃ§amento na aba **Saldos** e um lembrete na pÃ¡gina inicial (AtenÃ§Ã£o necessÃ¡ria). O lembrete e o lanÃ§amento sÃ³ somem quando vocÃª edita o valor e marca como pago
-- **Saldos**: visão **Vencimentos** (lanÃ§amentos do mÃªs (criados automaticamente pelo Registro de Contas), contas Ãºnicas (**EdiÃ§Ã£o** â€” algo que jÃ¡ aconteceu) e **Recebimentos** (renda fixa e pontual)) e visão **Extrato** (mês a mês, dia a dia, de tudo que foi marcado como pago ou recebido), com alertas de vencimento (hoje, amanhÃ£, em breve, vencida)
+- **Registro de Contas**: aba **Registros** com as contas que se repetem todo mÃªs (Luz, Aluguel...) â€” com **valor fixo** (valor, categoria e banco) ou **sem valor** (preenchido na hora de pagar). Também há **Composição do cartão** (assinaturas cobradas mensalmente no cartão de crédito) e **Fatura do cartão** (fatura do próximo vencimento, calculada descontando as assinaturas ativas do cartão escolhido; some da aba Saldos só quando marcada como paga). A mesma aba tem **Recebimentos**: rendas fixas do mÃªs (SalÃ¡rio, aluguÃ©is recebidos...) e recebimentos pontuais com data. **7 dias antes do vencimento**, cada conta vira um lanÃ§amento na aba **Saldos** e um lembrete na pÃ¡gina inicial (AtenÃ§Ã£o necessÃ¡ria). O lembrete e o lanÃ§amento sÃ³ somem quando vocÃª edita o valor e marca como pago
+- **Saldos**: visão **Vencimentos** (lanÃ§amentos do mÃªs (criados automaticamente pelo Registro de Contas, incluindo **Fatura do cartão**, contas Ãºnicas (**EdiÃ§Ã£o** â€” algo que jÃ¡ aconteceu) e **Recebimentos** (renda fixa e pontual)) e visão **Extrato** (mês a mês, dia a dia, de tudo que foi marcado como pago ou recebido), com alertas de vencimento (hoje, amanhÃ£, em breve, vencida)
 - **ImportaÃ§Ã£o de extratos** em **CSV** ou **PDF** (cartÃ£o/banco), com seleÃ§Ã£o do banco e mapeamento de colunas
 - **Renomear empresas**: razÃ£o social â†’ nome pessoal, aplicado automaticamente em todos os extratos
 - **TransaÃ§Ãµes** com ediÃ§Ã£o manual, categorias, filtros e busca
@@ -20,7 +20,7 @@ Aplicativo web de **controle financeiro familiar**, feito para usar no celular. 
 
 1. Acesse o link do site publicado
 2. Entre com o usuÃ¡rio e a senha fornecidos pelo administrador da famÃ­lia
-3. Comece cadastrando seus **bancos** (saldo atual de cada um) e depois as contas mensais no **Registro de Contas** (valor fixo ou sem valor definido)
+3. Comece cadastrando seus **bancos** (saldo atual de cada um) e depois as contas mensais no **Registro de Contas** (valor fixo, sem valor, composição do cartão ou fatura do cartão)
 4. Importe extratos (CSV/PDF) para registrar os lanÃ§amentos automaticamente
 
 Dica: use **Mais â†’ Ajustes â†’ Exportar tudo (JSON)** para baixar uma cÃ³pia de seguranÃ§a dos dados.

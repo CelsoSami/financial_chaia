@@ -105,6 +105,6 @@ function sortBanksByName(banks) {
 }
 
 function billDueDate(b, now) {
-  if (b && b.kind === 'once' && b.due_date) return String(b.due_date);
+  if (b && (b.kind === 'once' || b.kind === 'ccbill') && b.due_date) return String(b.due_date);
   return nextDueDate(b && b.due_day, now);
 }
