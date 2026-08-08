@@ -523,6 +523,17 @@ html[data-theme="light"] .hero{color:#04261b;background:linear-gradient(135deg,#
 .invoice-paid{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--good)}
 .invoice-paid svg{width:12px;height:12px;fill:currentColor}
 
+.stmt-month{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.stmt-month .field-label{margin:0;flex:none}
+.stmt-month .input{flex:1;max-width:180px}
+.stmt-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.stmt-sum .stat{padding:12px 13px}
+.stmt-sum .stat-value.inc{color:var(--good)}
+.stmt-day{display:flex;align-items:baseline;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:14px 2px 4px}
+.stmt-day:first-child{padding-top:6px}
+.stmt-row{display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid var(--border)}
+.stmt-row:last-child{border-bottom:0}
+
 /* ---------- MERCHANTS ---------- */
 .merchant-row{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--border)}
 .merchant-row:last-child{border-bottom:0}

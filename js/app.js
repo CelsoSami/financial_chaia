@@ -99,7 +99,9 @@
     insightsOpen: false,
     bankRotTimer: null,
     bankRotIdx: 0,
-    tmplSeg: 'bills'
+    tmplSeg: 'bills',
+    billsView: 'due',
+    extratoMonth: null
   };
 
   function icon(name, cls) {
@@ -1275,7 +1277,61 @@
     if (ok) { closeModal(); toast(seg === 'inc' ? t('tmpl.savedIncome') : t('tmpl.saved'), 'ok'); }
   }
 
+  function billsSegHtml() {
+    const seg = state.billsView === 'statement' ? 'statement' : 'due';
+    return '<div class="seg" style="margin-bottom:14px">' +
+      '<button class="seg-btn' + (seg === 'due' ? ' active' : '') + '" data-action="bills-seg" data-seg="due">' + t('bills.segDue') + '</button>' +
+      '<button class="seg-btn' + (seg === 'statement' ? ' active' : '') + '" data-action="bills-seg" data-seg="statement">' + t('bills.segStatement') + '</button>' +
+      '</div>';
+  }
+
+  function renderStatement() {
+    const mk = state.extratoMonth || monthKeyFromISO(todayISO());
+    const rows = (state.data.payments || []).map(function (p) {
+      const b = (state.data.bills || []).find(function (x) { return x.id === p.bill_id; });
+      return b ? { p: p, b: b, inc: (b.type || 'exp') === 'inc' } : null;
+    }).filter(Boolean)
+      .filter(function (r) { return monthKeyFromISO(r.p.paid_at) === mk; })
+      .sort(function (a, b) { return a.p.paid_at === b.p.paid_at ? 0 : (a.p.paid_at < b.p.paid_at ? -1 : 1); });
+    let paidTotal = 0, recvTotal = 0;
+    rows.forEach(function (r) {
+      const v = Math.abs(Number(r.p.amount) || 0);
+      if (r.inc) recvTotal += v; else paidTotal += v;
+    });
+    const bal = recvTotal - paidTotal;
+    let body = '';
+    let cur = null;
+    rows.forEach(function (r) {
+      if (r.p.paid_at !== cur) {
+        cur = r.p.paid_at;
+        const dt = new Date(Number(cur.slice(0, 4)), Number(cur.slice(5, 7)) - 1, Number(cur.slice(8, 10)));
+        const wd = dt.toLocaleDateString(LANG === 'en' ? 'en-US' : 'pt-BR', { weekday: 'long' });
+        body += '<div class="stmt-day">' + esc(wd) + ' · ' + fmtDate(cur, LANG) + '</div>';
+      }
+      body += '<div class="stmt-row">' +
+        '<span class="row-ico ' + (r.inc ? 'inc' : 'exp') + '">' + icon(catIconKey(r.b.category || 'cat.other')) + '</span>' +
+        '<div class="row-main"><div class="row-title">' + esc(r.b.name) + '</div>' +
+        '<div class="row-sub">' + catName(r.b.category) + '</div></div>' +
+        '<div class="row-end"><div class="row-amount' + (r.inc ? ' inc' : '') + '">' + (r.inc ? '+' : '-') + fmtMoney(Math.abs(Number(r.p.amount) || 0), LANG) + '</div></div>' +
+        '</div>';
+    });
+    const html =
+      billsSegHtml() +
+      '<p style="color:var(--muted);font-size:13.5px;margin-bottom:12px">' + t('bills.statementHint') + '</p>' +
+      '<div class="stmt-month"><label class="field-label">' + t('bills.month') + '</label><input class="input" type="month" id="bills-month" value="' + mk + '"></div>' +
+      '<div class="stmt-sum">' +
+      '<div class="stat"><div class="stat-label">' + t('bills.paidTotal') + '</div><div class="stat-value sm">' + fmtMoney(paidTotal, LANG) + '</div></div>' +
+      '<div class="stat"><div class="stat-label">' + t('bills.receivedTotal') + '</div><div class="stat-value sm inc">' + fmtMoney(recvTotal, LANG) + '</div></div>' +
+      '<div class="stat ' + (bal < 0 ? 'hot' : 'good') + '"><div class="stat-label">' + t('bills.monthBalance') + '</div><div class="stat-value sm">' + (bal < 0 ? '-' : '+') + fmtMoney(Math.abs(bal), LANG) + '</div></div>' +
+      '</div>' +
+      (rows.length ?
+        '<div class="card" style="padding:6px 14px">' + body + '</div>' :
+        '<div class="empty">' + icon('bills') + '<b>' + t('bills.stmtEmpty') + '</b><p>' + t('bills.stmtEmptyHint') + '</p></div>');
+    $('#view').innerHTML = html;
+  }
+
   function renderBills() {
+    if (state.billsView === 'statement') { renderStatement(); return; }
     const banks = (state.data.banks || []).filter(function (b) { return b.invoice_day; });
     const all = (state.data.bills || []).filter(function (b) { return b.active; });
     const incBills = all.filter(function (b) { return (b.type || 'exp') === 'inc'; });
@@ -1283,6 +1339,7 @@
     const now = new Date();
     const today = todayISO();
     const html =
+      billsSegHtml() +
       '<button class="btn btn-dash btn-block" data-action="open-bill" style="margin-bottom:12px">' + icon('plus') + t('bill.add') + '</button>' +
       (banks.length ?
         '<div class="card"><div class="card-title">' + icon('card') + t('bill.bankInvoices') + '</div>' +
@@ -1806,6 +1863,7 @@
       case 'open-tmpl': openTemplateModal(null, el.getAttribute('data-seg')); break;
       case 'edit-tmpl': openTemplateModal(id); break;
       case 'tmpl-seg': state.tmplSeg = el.getAttribute('data-seg') === 'income' ? 'income' : 'bills'; renderView(); break;
+      case 'bills-seg': state.billsView = el.getAttribute('data-seg') === 'statement' ? 'statement' : 'due'; renderView(); break;
       case 'save-tmpl': saveTemplate(id); break;
       case 'del-tmpl': {
         const isInc = (state.data.templates.find(function (x) { return x.id === id; }) || {}).type === 'inc';
@@ -1904,6 +1962,7 @@
       if (nv) nv.classList.toggle('hidden', e.target.value !== '__new__');
     }
     if (e.target.id === 'tx-month') { state.txFilters.month = e.target.value; renderTx(); }
+    if (e.target.id === 'bills-month') { state.extratoMonth = e.target.value; renderStatement(); }
     if (e.target.getAttribute('data-field')) {
       const i = Number(e.target.getAttribute('data-idx'));
       const f = e.target.getAttribute('data-field');
