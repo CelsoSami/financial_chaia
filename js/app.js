@@ -440,6 +440,8 @@
   }
 
   function countUp(el, target, fmtFn) {
+    if (!el) return;
+    if (window.__noAnim) { el.textContent = fmtFn(target); return; }
     const start = performance.now();
     const dur = 700;
     function frame(now) {
@@ -604,10 +606,10 @@
       '</div></div>' +
 
       '<div class="stat-grid">' +
-      statCard('card', t('stat.debt'), fmtMoney(st.totalDebt, LANG), st.totalDebt > 0 ? 'warn' : 'good') +
-      statCard('calendar', t('stat.dueMonth'), fmtMoney(st.dueMonth, LANG), st.dueMonth > 0 ? 'warn' : '') +
+      statCard('card', t('stat.debt'), fmtMoney(st.totalDebt, LANG), st.totalDebt > 0 ? 'warn' : 'good', 'stat-debt', st.totalDebt > 0 ? t('dash.tapView') : t('dash.zeroDebt')) +
+      statCard('calendar', t('stat.dueMonth'), fmtMoney(st.dueMonth, LANG), st.dueMonth > 0 ? 'warn' : '', 'stat-due', st.dueMonth > 0 ? t('dash.dueThisMonth') : t('dash.noDueThisMonth')) +
       bankDueCard(st) +
-      statCard('alert', t('stat.overdue'), fmtMoney(st.overdue, LANG), st.overdue > 0 ? 'hot' : '') +
+      statCard('alert', t('stat.overdue'), fmtMoney(st.overdue, LANG), st.overdue > 0 ? 'hot' : '', 'stat-overdue', st.overdue > 0 ? t('dash.overduePending') : t('dash.noOverdue'), st.overdue > 0) +
       '</div>' +
 
       '<div class="section-gap"></div>' +
@@ -677,14 +679,27 @@
     requestAnimationFrame(function () { drawHomeCharts(); });
     requestAnimationFrame(function () { animateRing(); });
     countUp($('#cash-count'), st.cash, function (v) { return fmtMoney(v, LANG); });
+    countUp($('#stat-debt'), st.totalDebt, function (v) { return fmtMoney(v, LANG); });
+    countUp($('#stat-due'), st.dueMonth, function (v) { return fmtMoney(v, LANG); });
+    countUp($('#stat-overdue'), st.overdue, function (v) { return fmtMoney(v, LANG); });
     startBankRotation(st);
   }
 
-  function statCard(ic, label, value, extra) {
-    return '<div class="stat ' + (extra || '') + '">' +
-      '<div class="stat-ico">' + icon(ic) + '</div>' +
-      '<div class="stat-label">' + label + '</div>' +
-      '<div class="stat-value">' + value + '</div></div>';
+  function statCard(ic, label, value, tone, id, sub, pulse) {
+    const vars = tone === 'warn'
+      ? '--tone:var(--warn);--tone-bg:var(--warn-bg);--tone-glow:color-mix(in srgb,var(--warn) 30%,transparent);--tone-wash:color-mix(in srgb,var(--warn) 8%,transparent)'
+      : tone === 'hot'
+        ? '--tone:var(--danger);--tone-bg:var(--danger-bg);--tone-glow:color-mix(in srgb,var(--danger) 30%,transparent);--tone-wash:color-mix(in srgb,var(--danger) 8%,transparent)'
+        : tone === 'good'
+          ? '--tone:var(--good);--tone-bg:var(--good-bg);--tone-glow:color-mix(in srgb,var(--good) 30%,transparent);--tone-wash:color-mix(in srgb,var(--good) 8%,transparent)'
+          : '--tone:var(--accent);--tone-bg:color-mix(in srgb,var(--accent) 14%,transparent);--tone-glow:color-mix(in srgb,var(--accent) 26%,transparent);--tone-wash:color-mix(in srgb,var(--accent) 7%,transparent)';
+    return '<button type="button" class="stat" data-action="go" data-view="bills" style="' + vars + '">' +
+      '<span class="stat-glow"></span>' +
+      '<span class="stat-ico">' + icon(ic) + '</span>' +
+      '<span class="stat-main"><span class="stat-label">' + label + '</span>' +
+      '<span class="stat-value"' + (id ? ' id="' + id + '"' : '') + '>' + value + '</span>' +
+      (sub ? '<span class="stat-sub">' + (pulse ? '<span class="stat-pulse"></span>' : '') + sub + '</span>' : '') +
+      '</span></button>';
   }
 
   function stopBankRotation() {
@@ -697,10 +712,12 @@
     const first = banks.length ? banks[0] : null;
     const label = first ? t('stat.dueMonth') + ' · ' + first.name : t('stat.dueMonth');
     const value = first ? fmtMoney(Number(st.dueByBank[first.id] || 0), LANG) : fmtMoney(st.dueMonth, LANG);
-    return '<div class="stat" id="stat-bankdue">' +
-      '<div class="stat-ico">' + icon('calendar') + '</div>' +
-      '<div class="stat-label" id="bankdue-label">' + esc(label) + '</div>' +
-      '<div class="stat-value" id="bankdue-value">' + value + '</div></div>';
+    return '<button type="button" class="stat" data-action="go" data-view="bills" style="--tone:var(--accent-2);--tone-bg:color-mix(in srgb,var(--accent-2) 14%,transparent);--tone-glow:color-mix(in srgb,var(--accent-2) 26%,transparent);--tone-wash:color-mix(in srgb,var(--accent-2) 7%,transparent)">' +
+      '<span class="stat-glow"></span>' +
+      '<span class="stat-ico">' + icon('bank') + '</span>' +
+      '<span class="stat-main"><span class="stat-label" id="bankdue-label">' + esc(label) + '</span>' +
+      '<span class="stat-value" id="bankdue-value">' + value + '</span>' +
+      '<span class="stat-sub">' + t('dash.tapView') + '</span></span></button>';
   }
 
   function startBankRotation(st) {
@@ -715,8 +732,14 @@
       const labelEl = $('#bankdue-label');
       const valEl = $('#bankdue-value');
       if (!labelEl || !valEl) { stopBankRotation(); return; }
-      labelEl.textContent = t('stat.dueMonth') + ' · ' + it.name;
-      valEl.textContent = fmtMoney(it.value, LANG);
+      labelEl.style.opacity = '0';
+      valEl.style.opacity = '0';
+      setTimeout(function () {
+        labelEl.textContent = t('stat.dueMonth') + ' · ' + it.name;
+        valEl.textContent = fmtMoney(it.value, LANG);
+        labelEl.style.opacity = '1';
+        valEl.style.opacity = '1';
+      }, 180);
       state.bankRotIdx++;
     };
     state.bankRotTimer = setInterval(tick, 3000);
@@ -1992,7 +2015,12 @@
       case 'go-settings': go('settings'); break;
       case 'open-actions': $('#actions-sheet').classList.remove('hidden'); break;
       case 'close-actions': $('#actions-sheet').classList.add('hidden'); break;
-      case 'open-tmpl': openTemplateModal(null, el.getAttribute('data-seg')); break;
+      case 'open-tmpl': {
+        const sh = $('#actions-sheet');
+        if (sh) sh.classList.add('hidden');
+        openTemplateModal(null, el.getAttribute('data-seg'));
+        break;
+      }
       case 'edit-tmpl': openTemplateModal(id); break;
       case 'tmpl-seg': state.tmplSeg = el.getAttribute('data-seg') === 'income' ? 'income' : 'bills'; renderView(); break;
       case 'bills-seg': state.billsView = el.getAttribute('data-seg') === 'statement' ? 'statement' : 'due'; renderView(); break;
@@ -2142,3 +2170,4 @@
 
   boot();
 })();
+

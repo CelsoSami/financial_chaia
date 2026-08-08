@@ -275,17 +275,46 @@ html[data-theme="dark"] .seg-btn.active{box-shadow:0 2px 8px rgba(0,0,0,.35)}
 .stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 @media(min-width:640px){.stat-grid{grid-template-columns:repeat(4,1fr)}}
 .stat{
-  background:var(--card);border:1px solid var(--border);border-radius:16px;
-  padding:13px 14px;position:relative;overflow:hidden;
+  position:relative;display:flex;flex-direction:column;gap:12px;
+  background:var(--card);border:1px solid var(--border);border-radius:18px;
+  padding:14px;overflow:hidden;cursor:default;text-align:left;
+  transition:transform .25s var(--ease),box-shadow .3s var(--ease),border-color .3s;
 }
-.stat .stat-ico{position:absolute;right:-6px;top:-6px;width:56px;height:56px;opacity:.09}
-.stat .stat-ico svg{width:100%;height:100%;fill:var(--text)}
-.stat-label{font-size:11.5px;color:var(--muted);font-weight:600;letter-spacing:.3px}
-.stat-value{font-size:19px;font-weight:800;margin-top:4px;letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+button.stat{cursor:pointer}
+.stat::after{
+  content:"";position:absolute;inset:0;background:var(--tone-wash,transparent);
+  opacity:0;transition:opacity .3s;pointer-events:none;
+}
+.stat:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--tone) 45%,transparent);box-shadow:0 12px 26px color-mix(in srgb,var(--tone) 16%,transparent)}
+.stat:active{transform:translateY(-1px) scale(.97)}
+.stat:hover::after{opacity:1}
+.stat-glow{
+  position:absolute;right:-32px;top:-32px;width:100px;height:100px;border-radius:50%;
+  background:radial-gradient(circle,var(--tone-glow,transparent),transparent 70%);
+  opacity:.45;transition:opacity .3s,transform .3s var(--ease);pointer-events:none;
+}
+.stat:hover .stat-glow{opacity:1;transform:scale(1.18)}
+.stat-ico{
+  width:38px;height:38px;border-radius:12px;flex:none;
+  display:grid;place-items:center;
+  background:var(--tone-bg,var(--card-2));color:var(--tone,var(--accent));
+  box-shadow:0 4px 12px color-mix(in srgb,var(--tone) 20%,transparent);
+  transition:transform .25s var(--ease);
+}
+.stat:hover .stat-ico{transform:scale(1.1) rotate(-5deg)}
+.stat-ico svg{width:20px;height:20px;fill:currentColor}
+.stat-main{display:flex;flex-direction:column;gap:3px;min-width:0;position:relative;z-index:1}
+.stat-label{font-size:10.5px;color:var(--muted);font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+.stat-value{font-size:18.5px;font-weight:800;letter-spacing:-.4px;font-variant-numeric:tabular-nums;line-height:1.2}
 .stat-value.sm{font-size:15.5px}
-.stat.hot{border-color:color-mix(in srgb,var(--danger) 45%,transparent);background:linear-gradient(160deg,var(--danger-bg),var(--card))}
-.stat.good{border-color:color-mix(in srgb,var(--good) 40%,transparent)}
-.stat.warn{border-color:color-mix(in srgb,var(--warn) 40%,transparent)}
+.stat-sub{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--faint);font-weight:600;margin-top:1px}
+#bankdue-label,#bankdue-value{transition:opacity .18s ease}
+.stat-pulse{width:7px;height:7px;border-radius:50%;background:var(--tone);flex:none;animation:statPulse 1.8s ease-out infinite}
+@keyframes statPulse{
+  0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--tone) 45%,transparent)}
+  70%{box-shadow:0 0 0 8px transparent}
+  100%{box-shadow:0 0 0 0 transparent}
+}
 
 .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;letter-spacing:.2px}
 .badge.danger{background:var(--danger-bg);color:var(--danger)}

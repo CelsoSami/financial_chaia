@@ -110,18 +110,18 @@
     <div class="sheet-backdrop" data-action="close-actions"></div>
     <div class="sheet">
       <p class="sheet-title" data-i18n="sheet.title">Ações rápidas</p>
-      <button class="sheet-item" data-action="open-tx">
-        <span class="sheet-ico teal"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      <button class="sheet-item" data-action="open-tmpl" data-seg="bills">
+        <span class="sheet-ico teal"><svg viewBox="0 0 24 24"><path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 4v2h6V7H9Zm0 4v2h6v-2H9Zm0 4v2h4v-2H9Z"/></svg></span>
         <span>
-          <strong data-i18n="sheet.addTx">Nova transação</strong>
-          <small data-i18n="sheet.addTxHint">Registre manualmente um lançamento</small>
+          <strong data-i18n="tmpl.segBills">Contas</strong>
+          <small data-i18n="sheet.addBillHint">Conta fixa, assinatura ou fatura do cartão</small>
         </span>
       </button>
-      <button class="sheet-item" data-action="go" data-view="import">
-        <span class="sheet-ico blue"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0 4 4m-4-4L8 8M4 14v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/></svg></span>
+      <button class="sheet-item" data-action="open-tmpl" data-seg="income">
+        <span class="sheet-ico blue"><svg viewBox="0 0 24 24"><path d="M12 4v12m0 0 5-5m-5 5-5-5M5 20h14"/></svg></span>
         <span>
-          <strong data-i18n="sheet.import">Importar extrato</strong>
-          <small data-i18n="sheet.importHint">CSV ou PDF do cartão / banco</small>
+          <strong data-i18n="tmpl.segIncome">Recebimentos</strong>
+          <small data-i18n="sheet.addIncomeHint">Salário, aluguel e recebimentos fixos</small>
         </span>
       </button>
     </div>
