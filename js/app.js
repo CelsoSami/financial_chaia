@@ -308,7 +308,16 @@
         tx: (tx || []).sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); }),
         aliases: aliases || [],
         bills: bills || [],
-        templates: (templates || []).sort(function (a, b) { return (Number(a.due_day) || 31) - (Number(b.due_day) || 31); }),
+        templates: (templates || []).sort(function (a, b) {
+          const dayOf = function (t) {
+            if (t.kind === 'cccomp' && t.bank_id) {
+              const br = (banks || []).find(function (x) { return x.id === t.bank_id; });
+              if (br && br.invoice_day) return Number(br.invoice_day);
+            }
+            return Number(t.due_day) || 1;
+          };
+          return (dayOf(a) || 31) - (dayOf(b) || 31);
+        }),
         payments: payments || [],
         bankPayments: bankPayments || [],
         settings: settingsObj
@@ -371,20 +380,25 @@
         const day = templateDueDay(t);
         const due = nextDueDate(day, now);
         const mk = monthKeyFromISO(due);
-        const exists = (state.data.bills || []).some(function (b) {
-          return b.template_id === t.id && monthKeyFromISO(billDueDate(b, now)) === mk;
+        const nmk = parseISO(due);
+        nmk.setMonth(nmk.getMonth() + 1);
+        const mkNext = monthKeyFromISO(isoFromParts(nmk.getFullYear(), nmk.getMonth() + 1, 1));
+        const linked = (state.data.bills || []).filter(function (b) {
+          if (b.template_id !== t.id) return false;
+          const bMk = monthKeyFromISO(billDueDate(b, now));
+          if (t.kind === 'cccomp') return bMk === mk || (bMk === mkNext && (Number(b.due_day) || 1) !== day);
+          return bMk === mk;
         });
         if (t.kind === 'cccomp') {
-          const cur = (state.data.bills || []).find(function (b) {
-            return b.template_id === t.id && b.kind === 'monthly' &&
-              monthKeyFromISO(billDueDate(b, now)) === mk && (Number(b.due_day) || 1) !== day;
+          const cur = linked.find(function (b) {
+            return b.kind === 'monthly' && (Number(b.due_day) || 1) !== day;
           });
           if (cur) {
             await dbUpdate('bills', cur.id, { due_day: day });
             changed = true;
           }
         }
-        if (exists) continue;
+        if (linked.length > 0) continue;
         if (diffDays(due, today) > 7) continue;
         await dbInsert('bills', {
           name: t.name,
