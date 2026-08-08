@@ -384,21 +384,25 @@
         nmk.setMonth(nmk.getMonth() + 1);
         const mkNext = monthKeyFromISO(isoFromParts(nmk.getFullYear(), nmk.getMonth() + 1, 1));
         const linked = (state.data.bills || []).filter(function (b) {
-          if (b.template_id !== t.id) return false;
+          if (b.template_id !== t.id || b.kind !== 'monthly') return false;
           const bMk = monthKeyFromISO(billDueDate(b, now));
           if (t.kind === 'cccomp') return bMk === mk || (bMk === mkNext && (Number(b.due_day) || 1) !== day);
           return bMk === mk;
         });
-        if (t.kind === 'cccomp') {
-          const cur = linked.find(function (b) {
-            return b.kind === 'monthly' && (Number(b.due_day) || 1) !== day;
-          });
-          if (cur) {
-            await dbUpdate('bills', cur.id, { due_day: day });
+        if (linked.length > 0) {
+          const cur = linked[0];
+          const patch = {};
+          if (t.kind === 'cccomp' && (Number(cur.due_day) || 1) !== day) patch.due_day = day;
+          if (cur.name !== t.name) patch.name = t.name;
+          if ((cur.category || null) !== (t.category || null)) patch.category = t.category || null;
+          if ((cur.bank_id || null) !== (t.bank_id || null)) patch.bank_id = t.bank_id || null;
+          if ((t.kind === 'fixed' || t.kind === 'cccomp') && t.amount != null && (Number(cur.amount) || 0) !== Math.abs(Number(t.amount))) patch.amount = Math.abs(Number(t.amount));
+          if (Object.keys(patch).length > 0) {
+            await dbUpdate('bills', cur.id, patch);
             changed = true;
           }
+          continue;
         }
-        if (linked.length > 0) continue;
         if (diffDays(due, today) > 7) continue;
         await dbInsert('bills', {
           name: t.name,
