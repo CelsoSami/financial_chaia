@@ -368,11 +368,22 @@
       if (legacy.length) toast(t('tmpl.migrated'), 'info');
       const templates = (state.data.templates || []).filter(function (t) { return t.active; });
       for (const t of templates) {
-        const due = nextDueDate(Number(t.due_day) || 1, now);
+        const day = templateDueDay(t);
+        const due = nextDueDate(day, now);
         const mk = monthKeyFromISO(due);
         const exists = (state.data.bills || []).some(function (b) {
           return b.template_id === t.id && monthKeyFromISO(billDueDate(b, now)) === mk;
         });
+        if (t.kind === 'cccomp') {
+          const cur = (state.data.bills || []).find(function (b) {
+            return b.template_id === t.id && b.kind === 'monthly' &&
+              monthKeyFromISO(billDueDate(b, now)) === mk && (Number(b.due_day) || 1) !== day;
+          });
+          if (cur) {
+            await dbUpdate('bills', cur.id, { due_day: day });
+            changed = true;
+          }
+        }
         if (exists) continue;
         if (diffDays(due, today) > 7) continue;
         await dbInsert('bills', {
@@ -380,7 +391,7 @@
           amount: (t.kind === 'fixed' || t.kind === 'cccomp') && t.amount != null ? Math.abs(Number(t.amount)) : 0,
           kind: 'monthly',
           type: t.type === 'inc' ? 'inc' : 'exp',
-          due_day: Number(t.due_day) || 1,
+          due_day: day,
           due_date: null,
           category: t.category || null,
           bank_id: t.bank_id || null,
@@ -1162,6 +1173,14 @@
     }
   }
 
+  function templateDueDay(tp) {
+    if (tp && tp.kind === 'cccomp' && tp.bank_id) {
+      const bankRow = (state.data.banks || []).find(function (x) { return x.id === tp.bank_id; });
+      if (bankRow && bankRow.invoice_day) return Number(bankRow.invoice_day);
+    }
+    return Number(tp && tp.due_day) || 1;
+  }
+
   function renderTemplates() {
     const seg = state.tmplSeg === 'income' ? 'income' : 'bills';
     const list = (state.data.templates || []).filter(function (t) {
@@ -1182,7 +1201,7 @@
       return '<div class="list-row">' +
         '<span class="row-ico' + (income ? ' inc' : '') + '">' + icon(comp ? 'card' : (income ? 'income' : 'calendar')) + '</span>' +
         '<div class="row-main"><div class="row-title">' + esc(tp.name) + '</div>' +
-        '<div class="row-sub">' + (income ? t('tmpl.incomeDayLabel', { d: Number(tp.due_day) || 1 }) : t('tmpl.dayLabel', { d: Number(tp.due_day) || 1 })) +
+        '<div class="row-sub">' + (income ? t('tmpl.incomeDayLabel', { d: Number(tp.due_day) || 1 }) : t('tmpl.dayLabel', { d: templateDueDay(tp) })) +
         amt + (tp.bank_id ? ' · ' + esc(bankName(tp.bank_id)) : '') + '</div></div>' +
         '<span class="badge ' + (income ? 'good' : (comp ? 'soft' : (fixed ? 'good' : 'soft'))) + '">' +
         (income ? t('tmpl.incomeFixed') : comp ? t('tmpl.cccompBadge') : fixed ? t('tmpl.fixed') : t('tmpl.variable')) + '</span>' +
