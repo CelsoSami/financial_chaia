@@ -283,7 +283,7 @@
     state.bankMap = m;
   }
 
-  async function loadData(silent) {
+async function loadData(silent) {
     state.loading = true;
     if (!silent) setSync('wait');
     try {
@@ -298,7 +298,7 @@
         return;
       }
       state.setupNeeded = false;
-      const [banks, tx, aliases, bills, templates, payments, bankPayments, settings] = await Promise.all([
+const [banks, tx, aliases, bills, templates, payments, bankPayments, settings] = await Promise.all([
         dbFetch('banks'), dbFetch('transactions'), dbFetch('aliases'), dbFetch('bills'), dbFetch('bill_templates'), dbFetch('bill_payments'), dbFetch('bank_payments'), dbFetch('settings')
       ]);
       const settingsObj = {};
@@ -328,7 +328,7 @@
       if (synced) { loadData(true); return; }
       setSync('on');
       renderView();
-    } catch (e) {
+} catch (e) {
       const msg = String(e && e.message || e);
       if (isSetupError(e)) {
         state.setupNeeded = true;
@@ -457,6 +457,12 @@ function fmtSigned(v, lang) {
     return (v < 0 ? '-' : '+') + fmtMoney(Math.abs(v), lang);
   }
 
+  function monthDueDate(b, now) {
+    if (b.kind === 'once' || b.kind === 'ccbill') return b.due_date ? String(b.due_date) : null;
+    const y = now.getFullYear(), m = now.getMonth() + 1;
+    return isoFromParts(y, m, Math.min(Number(b.due_day) || 1, daysInMonth(y, m)));
+  }
+
   function monthStats() {
     const now = new Date();
     const y = now.getFullYear(), m = now.getMonth() + 1;
@@ -466,15 +472,14 @@ function fmtSigned(v, lang) {
     (state.data.bills || []).forEach(function (b) {
       if (!b.active) return;
       if ((b.type || 'exp') === 'inc') return;
-      const due = billDueDate(b, now);
+      const due = monthDueDate(b, now);
+      if (!due || !isSameMonth(due, y, m)) return;
       const mk = monthKeyFromISO(due);
       const paid = (state.data.payments || []).some(function (p) { return p.bill_id === b.id && p.month === mk; });
       if (paid) return;
-      if (isSameMonth(due, y, m)) {
-        pending[due] = (pending[due] || 0) + (Number(b.amount) || 0);
-        const key = b.bank_id || '';
-        dueByBank[key] = (dueByBank[key] || 0) + (Number(b.amount) || 0);
-      }
+      pending[due] = (pending[due] || 0) + (Number(b.amount) || 0);
+      const key = b.bank_id || '';
+      dueByBank[key] = (dueByBank[key] || 0) + (Number(b.amount) || 0);
     });
     let dueMonth = 0, overdue = 0;
     Object.keys(pending).forEach(function (d) {
@@ -495,15 +500,14 @@ function fmtSigned(v, lang) {
     const now = new Date();
     const today = todayISO();
     const y = now.getFullYear(), m = now.getMonth() + 1;
-    const rows = (state.data.bills || []).filter(function (b) {
-      if (!b.active) return false;
-      if ((b.type || 'exp') === 'inc') return false;
-      return true;
-    }).map(function (b) {
-      const due = billDueDate(b, now);
+    const rows = (state.data.bills || []).map(function (b) {
+      if (!b.active) return null;
+      if ((b.type || 'exp') === 'inc') return null;
+      const due = monthDueDate(b, now);
+      if (!due || !isSameMonth(due, y, m)) return null;
       const paid = (state.data.payments || []).some(function (p) { return p.bill_id === b.id && p.month === monthKeyFromISO(due); });
       return { b: b, due: due, paid: paid };
-    }).filter(function (r) { return isSameMonth(r.due, y, m); })
+    }).filter(Boolean)
       .sort(function (a, c) {
         if (a.paid !== c.paid) return a.paid ? 1 : -1;
         return String(a.due).localeCompare(String(c.due));
@@ -531,23 +535,11 @@ function fmtSigned(v, lang) {
 
       '<div class="section-gap"></div>' +
       '<div class="card">' +
-      '<div class="card-title">' + icon('bills') + t('dash.extract') + ' · ' + monthLabel(monthKeyFromISO(today), LANG) +
+      '<div class="card-title">' + icon('bills') + t('dash.monthBills') + ' · ' + monthLabel(monthKeyFromISO(today), LANG) +
       (unpaid > 0 ? '<span class="x-total">' + fmtMoney(unpaid, LANG) + '</span>' : '') +
       '</div>' +
       (rows.length ?
-        rows.map(function (r) {
-          const d = diffDays(r.due, today);
-          const status = r.paid ? 'paid' : d < 0 ? 'overdue' : 'pending';
-          const statusKey = r.paid ? t('bill.paid') : (d < 0 ? t('bill.overdue') : t('bill.pending'));
-          const cat = catName(r.b.category);
-          return '<div class="list-row">' +
-            '<span class="hb-dot ' + status + '"></span>' +
-            '<div class="row-main"><div class="row-title">' + esc(r.b.name) + '</div>' +
-            '<div class="row-sub">' + (cat ? cat + ' · ' : '') + fmtDate(r.due, LANG) + '</div></div>' +
-            '<div class="row-end"><div class="row-amount">' + fmtMoney(r.b.amount, LANG) + '</div>' +
-            '<span class="bill-status ' + status + (status === 'paid' ? '">' + icon('check') : '">') + statusKey + '</span>' +
-            '</div></div>';
-        }).join('') +
+        rows.map(function (r) { return renderBillRow(r.b, r.due); }).join('') +
         (unpaid > 0 ? '<div class="hb-total"><span>' + t('dash.extractTotal') + '</span><b>' + fmtMoney(unpaid, LANG) + '</b></div>' : '') :
         '<div class="empty">' + icon('bills') + '<b>' + t('dash.noBillsMonth') + '</b><p>' + t('dash.noBillsMonthHint') + '</p></div>') +
       '<button class="btn btn-soft btn-block" style="margin-top:12px" data-action="go" data-view="bills">' + t('dash.viewAll') + '</button>' +
@@ -1198,13 +1190,7 @@ function renderTx() {
     if (ok) { closeModal(); toast(seg === 'inc' ? t('tmpl.savedIncome') : t('tmpl.saved'), 'ok'); }
   }
 
-  function billsSegHtml() {
-    const seg = state.billsView === 'statement' ? 'statement' : 'due';
-    return '<div class="seg" style="margin-bottom:14px">' +
-      '<button class="seg-btn' + (seg === 'due' ? ' active' : '') + '" data-action="bills-seg" data-seg="due">' + t('bills.segDue') + '</button>' +
-      '<button class="seg-btn' + (seg === 'statement' ? ' active' : '') + '" data-action="bills-seg" data-seg="statement">' + t('bills.segStatement') + '</button>' +
-      '</div>';
-  }
+
 
   function renderStatement() {
     const mk = state.extratoMonth || monthKeyFromISO(todayISO());
@@ -1236,8 +1222,7 @@ function renderTx() {
         '<div class="row-end"><div class="row-amount' + (r.inc ? ' inc' : '') + '">' + (r.inc ? '+' : '-') + fmtMoney(Math.abs(Number(r.p.amount) || 0), LANG) + '</div></div>' +
         '</div>';
     });
-    const html =
-      billsSegHtml() +
+const html =
       '<p style="color:var(--muted);font-size:13.5px;margin-bottom:12px">' + t('bills.statementHint') + '</p>' +
       '<div class="stmt-month"><label class="field-label">' + t('bills.month') + '</label><input class="input" type="month" id="bills-month" value="' + mk + '"></div>' +
       '<div class="stmt-sum">' +
@@ -1251,59 +1236,15 @@ function renderTx() {
     $('#view').innerHTML = html;
   }
 
-  function renderBills() {
-    if (state.billsView === 'statement') { renderStatement(); return; }
-    const banks = (state.data.banks || []).filter(function (b) { return b.invoice_day; });
-    const all = (state.data.bills || []).filter(function (b) { return b.active; });
-    const now = new Date();
-    const today = todayISO();
-    const incBills = all.filter(function (b) { return (b.type || 'exp') === 'inc'; });
-    const bills = all.filter(function (b) {
-      if ((b.type || 'exp') === 'inc') return false;
-      if (b.kind === 'ccbill' && (state.data.payments || []).some(function (p) {
-        return p.bill_id === b.id && p.month === monthKeyFromISO(billDueDate(b, now));
-      })) return false;
-      return true;
-    });
-    const html =
-      billsSegHtml() +
-      '<button class="btn btn-dash btn-block" data-action="open-bill" style="margin-bottom:12px">' + icon('plus') + t('bill.add') + '</button>' +
-      (banks.length ?
-        '<div class="card"><div class="card-title">' + icon('card') + t('bill.bankInvoices') + '</div>' +
-        banks.map(function (b) {
-          const due = nextDueDate(b.invoice_day, now);
-          const d = diffDays(due, today);
-          const cls = d < 0 ? 'today' : (d <= 3 ? 'soon' : '');
-          const pay = bankInvoicePaid(b);
-          return '<div class="invoice-row">' +
-            '<span class="bank-dot" style="background:' + (b.color || '#10b981') + '">' + esc(b.name.slice(0, 1).toUpperCase()) + '</span>' +
-            '<div class="row-main"><div class="row-title">' + esc(b.name) + '</div>' +
-            '<div class="row-sub due-chip ' + (pay ? '' : cls) + '">' + t('bank.invoiceOn', { d: b.invoice_day }) + ' · ' + fmtDate(due, LANG) +
-            (!pay && d < 0 ? ' · ' + t('bill.overdue') : !pay && d === 0 ? ' · ' + t('alert.dueToday') : !pay && d === 1 ? ' · ' + t('alert.dueTomorrow') : '') + '</div></div>' +
-            '<div class="invoice-end">' +
-            (pay ?
-              '<div class="invoice-paid">' + icon('check') + t('bank.invoicePaid') + ' · ' + fmtDate(pay.paid_at || due, LANG) + '</div>' +
-              '<div class="invoice-actions"><button class="act-btn" data-action="undo-invoice-paid" data-id="' + b.id + '">' + t('bill.undoPaid') + '</button></div>' :
-              '<div class="row-amount">' + fmtMoney(b.debt || 0, LANG) + '</div>' +
-              '<div class="invoice-actions">' + (Number(b.debt) > 0 ?
-                '<button class="act-btn primary" data-action="pay-invoice" data-id="' + b.id + '">' + t('bank.payInvoice') + '</button>' :
-                '<span class="due-chip">' + t('bank.noDebt') + '</span>') + '</div>') +
-            '</div></div>';
-        }).join('') + '</div>' + '<div class="section-gap"></div>' : '') +
-      (incBills.length ?
-        '<div class="card"><div class="card-title">' + icon('income') + t('tmpl.segIncome') + '</div>' +
-        incBills.map(function (b) { return renderBillRow(b); }).join('') + '</div>' + '<div class="section-gap"></div>' : '') +
-      (bills.length ? bills.map(function (b) { return renderBillRow(b); }).join('') :
-        (incBills.length ? '' :
-          '<div class="empty">' + icon('bills') + '<b>' + t('bill.noBills') + '</b><p>' + t('bill.noBillsHint') + '</p></div>'));
-    $('#view').innerHTML = html;
+function renderBills() {
+    renderStatement();
   }
 
-  function renderBillRow(b) {
+function renderBillRow(b, dueOverride) {
     const inc = (b.type || 'exp') === 'inc';
     const now = new Date();
     const today = todayISO();
-    const due = billDueDate(b, now);
+    const due = dueOverride || billDueDate(b, now);
     const mk = monthKeyFromISO(due);
     const paid = (state.data.payments || []).some(function (p) { return p.bill_id === b.id && p.month === mk; });
     const d = diffDays(due, today);
@@ -1311,8 +1252,8 @@ function renderTx() {
     if (paid) { status = 'paid'; statusKey = inc ? t('bill.received') : t('bill.paid'); }
     else if (d < 0) { status = 'overdue'; statusKey = t('bill.overdue'); }
     else { status = 'pending'; statusKey = t('bill.pending'); }
-    const markLabel = inc ? t('bill.markReceived') : t('bill.markPaid');
-    return '<div class="card"><div class="list-row" style="padding:0 0 10px;border:0">' +
+const markLabel = inc ? t('bill.markReceived') : t('bill.markPaid');
+    return '<div class="list-row" style="padding:12px 0 10px">' +
       '<span class="row-ico ' + (status === 'overdue' ? 'exp' : status === 'paid' ? 'inc' : '') + '">' + icon(catIconKey(b.category || 'cat.other')) + '</span>' +
       '<div class="row-main"><div class="row-title">' + esc(b.name) + '</div>' +
       '<div class="row-sub">' + (b.kind === 'ccbill' ? esc(bankName(b.bank_id)) + ' · ' : '') + catName(b.category) + ' · ' +
@@ -1326,7 +1267,7 @@ function renderTx() {
         '<button class="act-btn primary" data-action="mark-paid" data-id="' + b.id + '">' + markLabel + '</button>') +
       '<button class="act-btn" data-action="edit-bill" data-id="' + b.id + '">' + t('common.edit') + '</button>' +
       '<button class="act-btn danger" data-action="del-bill" data-id="' + b.id + '">' + icon('trash') + '</button>' +
-      '</div></div>';
+      '</div>';
   }
 
   function openBillModal(id) {
@@ -1389,7 +1330,7 @@ function renderTx() {
     if (!b) return;
     const inc = (b.type || 'exp') === 'inc';
     const now = new Date();
-    const due = billDueDate(b, now);
+const due = monthDueDate(b, now);
     const mk = monthKeyFromISO(due);
     const needsValue = !b.amount;
     openModal({
@@ -1409,7 +1350,7 @@ function renderTx() {
     const amt = parseAmount($('#m-pamount').value);
     if (amt === null || amt <= 0) { toast(t('bill.amountRequired'), 'err'); return; }
     const now = new Date();
-    const due = billDueDate(b, now);
+const due = monthDueDate(b, now);
     const mk = monthKeyFromISO(due);
     const paid = Math.abs(amt);
     const ok = await handleMutation(async function () {
@@ -1423,7 +1364,7 @@ function renderTx() {
     const now = new Date();
     const b = state.data.bills.find(function (x) { return x.id === id; });
     if (!b) return;
-    const due = billDueDate(b, now);
+const due = monthDueDate(b, now);
     const mk = monthKeyFromISO(due);
     const pay = state.data.payments.find(function (p) { return p.bill_id === id && p.month === mk; });
     if (!pay) return;
@@ -1431,54 +1372,7 @@ function renderTx() {
     if (ok) toast(t('bill.unpaidMsg'), 'ok');
   }
 
-  function bankInvoicePaid(b) {
-    const due = nextDueDate(Number(b.invoice_day) || 1, new Date());
-    const mk = monthKeyFromISO(due);
-    return (state.data.bankPayments || []).find(function (p) { return p.bank_id === b.id && p.month === mk; }) || null;
-  }
-
-  function markInvoicePaidFlow(id) {
-    const b = state.data.banks.find(function (x) { return x.id === id; });
-    if (!b) return;
-    const due = nextDueDate(Number(b.invoice_day) || 1, new Date());
-    const mk = monthKeyFromISO(due);
-    openModal({
-      title: t('bank.invoicePaidTitle'),
-      body: '<p style="font-size:14px;color:var(--muted)">' + t('bank.invoicePaidHint', { n: esc(b.name), m: esc(monthLabel(mk, LANG)) }) + '</p>' +
-        '<div class="field" style="margin-top:12px"><label class="field-label">' + t('bill.amount') + '</label><input class="input" id="m-ipamount" inputmode="decimal" value="' + String(Number(b.debt) || 0).replace('.', ',') + '"></div>' +
-        '<div class="modal-actions">' +
-        '<button class="btn btn-soft" data-action="close-modal">' + t('common.cancel') + '</button>' +
-        '<button class="btn btn-primary" data-action="confirm-invoice-paid" data-id="' + id + '">' + t('bank.payInvoice') + '</button></div>'
-    });
-  }
-
-  async function confirmInvoicePaid(id) {
-    const b = state.data.banks.find(function (x) { return x.id === id; });
-    if (!b) return;
-    const amt = parseAmount($('#m-ipamount').value);
-    if (amt === null || amt <= 0) { toast(t('bank.invoiceAmountRequired'), 'err'); return; }
-    const due = nextDueDate(Number(b.invoice_day) || 1, new Date());
-    const mk = monthKeyFromISO(due);
-    const paid = Math.abs(amt);
-    const ok = await handleMutation(async function () {
-      await dbUpsert('bank_payments', { bank_id: id, month: mk, amount: paid, paid_at: todayISO() }, 'bank_id,month');
-      if (Number(b.debt) > 0) await dbUpdate('banks', id, { debt: 0 });
-    });
-    if (ok) { closeModal(); toast(t('bank.invoicePaidMsg'), 'ok'); }
-  }
-
-  async function undoInvoicePaid(id) {
-    const b = state.data.banks.find(function (x) { return x.id === id; });
-    const pay = b ? bankInvoicePaid(b) : null;
-    if (!pay) return;
-    const ok = await handleMutation(async function () {
-      await dbDelete('bank_payments', pay.id);
-      if (Number(b.debt) === 0 && Number(pay.amount) > 0) await dbUpdate('banks', id, { debt: Number(pay.amount) });
-    });
-    if (ok) toast(t('bank.invoiceUnpaidMsg'), 'ok');
-  }
-
-  function renderBanks() {
+function renderBanks() {
     const banks = state.data.banks || [];
     const html =
       '<button class="btn btn-dash btn-block" data-action="open-bank" style="margin-bottom:12px">' + icon('plus') + t('bank.add') + '</button>' +
@@ -1794,8 +1688,7 @@ function renderTx() {
         break;
       }
       case 'edit-tmpl': openTemplateModal(id); break;
-      case 'tmpl-seg': state.tmplSeg = el.getAttribute('data-seg') === 'income' ? 'income' : 'bills'; renderView(); break;
-      case 'bills-seg': state.billsView = el.getAttribute('data-seg') === 'statement' ? 'statement' : 'due'; renderView(); break;
+case 'tmpl-seg': state.tmplSeg = el.getAttribute('data-seg') === 'income' ? 'income' : 'bills'; renderView(); break;
       case 'save-tmpl': saveTemplate(id); break;
       case 'del-tmpl': {
         const isInc = (state.data.templates.find(function (x) { return x.id === id; }) || {}).type === 'inc';
@@ -1820,7 +1713,7 @@ function renderTx() {
       case 'open-bank': openBankModal(null); break;
       case 'edit-bank': openBankModal(id); break;
       case 'save-bank': saveBank(id); break;
-      case 'open-bill': openBillModal(null); break;
+case 'open-bill': openBillModal(null); break;
       case 'edit-bill': openBillModal(id); break;
       case 'save-bill': saveBill(id); break;
       case 'del-bill': {
@@ -1831,12 +1724,9 @@ function renderTx() {
         });
         break;
       }
-      case 'mark-paid': markPaidFlow(id); break;
+case 'mark-paid': markPaidFlow(id); break;
       case 'confirm-paid': confirmPaid(id); break;
       case 'undo-paid': undoPaid(id); break;
-      case 'pay-invoice': markInvoicePaidFlow(id); break;
-      case 'confirm-invoice-paid': confirmInvoicePaid(id); break;
-      case 'undo-invoice-paid': undoInvoicePaid(id); break;
       case 'save-alias': saveAlias(el.getAttribute('data-raw')); break;
       case 'merch-pending': state.merchFilter.pendingOnly = val === '1'; renderMerchants(); break;
       case 'toggle-theme': {
