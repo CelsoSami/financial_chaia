@@ -1353,9 +1353,12 @@ const due = monthDueDate(b, now);
 const due = monthDueDate(b, now);
     const mk = monthKeyFromISO(due);
     const paid = Math.abs(amt);
-    const ok = await handleMutation(async function () {
+const ok = await handleMutation(async function () {
       await dbUpsert('bill_payments', { bill_id: id, month: mk, amount: paid, paid_at: todayISO() }, 'bill_id,month');
       if (!b.amount) await dbUpdate('bills', id, { amount: paid });
+      const inc = (b.type || 'exp') === 'inc';
+      const cur = Number(state.data.settings.cash_balance) || 0;
+      await dbUpsert('settings', { key: 'cash_balance', value: inc ? cur + paid : cur - paid }, 'key');
     });
     if (ok) { closeModal(); toast((b.type || 'exp') === 'inc' ? t('bill.receivedMsg') : t('bill.paidMsg'), 'ok'); }
   }
@@ -1368,7 +1371,13 @@ const due = monthDueDate(b, now);
     const mk = monthKeyFromISO(due);
     const pay = state.data.payments.find(function (p) { return p.bill_id === id && p.month === mk; });
     if (!pay) return;
-    const ok = await handleMutation(function () { return dbDelete('bill_payments', pay.id); });
+    const ok = await handleMutation(async function () {
+      await dbDelete('bill_payments', pay.id);
+      const inc = (b.type || 'exp') === 'inc';
+      const cur = Number(state.data.settings.cash_balance) || 0;
+      const amt = Math.abs(Number(pay.amount) || 0);
+      await dbUpsert('settings', { key: 'cash_balance', value: inc ? cur - amt : cur + amt }, 'key');
+    });
     if (ok) toast(t('bill.unpaidMsg'), 'ok');
   }
 
@@ -1813,7 +1822,11 @@ case 'mark-paid': markPaidFlow(id); break;
     if (type) { state.txFilters.type = type.getAttribute('data-value'); renderTx(); }
   });
 
+let lastVW = window.innerWidth;
 window.addEventListener('resize', debounce(function () {
+    const w = window.innerWidth;
+    if (w === lastVW) return;
+    lastVW = w;
     if (state.view === 'home') renderView();
   }, 200));
 
