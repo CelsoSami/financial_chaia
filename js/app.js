@@ -491,8 +491,57 @@ function fmtSigned(v, lang) {
     const monthTx = state.data.tx.filter(function (t) { return isSameMonth(t.date, y, m); });
     const monthSpend = monthTx.filter(function (t) { return t.type === 'expense'; }).reduce(function (a, t) { return a + Math.abs(Number(t.amount) || 0); }, 0);
     const monthIncome = monthTx.filter(function (t) { return t.type === 'income'; }).reduce(function (a, t) { return a + Math.abs(Number(t.amount) || 0); }, 0);
-    return { cash: cash, totalDebt: totalDebt, dueMonth: dueMonth, overdue: overdue, dueByBank: dueByBank, monthSpend: monthSpend, monthIncome: monthIncome, y: y, m: m };
+return { cash: cash, totalDebt: totalDebt, dueMonth: dueMonth, overdue: overdue, dueByBank: dueByBank, monthSpend: monthSpend, monthIncome: monthIncome, y: y, m: m };
 }
+
+  function overduePastEntries(now) {
+    const today = todayISO();
+    const cy = now.getFullYear(), cm = now.getMonth() + 1;
+    const paidByBill = {};
+    (state.data.payments || []).forEach(function (p) {
+      if (!paidByBill[p.bill_id]) paidByBill[p.bill_id] = {};
+      paidByBill[p.bill_id][p.month] = true;
+    });
+    const out = [];
+    (state.data.bills || []).forEach(function (b) {
+      if (!b.active) return;
+      if ((b.type || 'exp') === 'inc') return;
+      const paidMonths = paidByBill[b.id] || {};
+      if (b.kind === 'once' || b.kind === 'ccbill') {
+        const due = b.due_date ? String(b.due_date) : null;
+        if (!due || due >= today) return;
+        if (paidMonths[monthKeyFromISO(due)]) return;
+        out.push({ b: b, due: due });
+        return;
+      }
+      let created = null;
+      if (b.created_at) {
+        const c = String(b.created_at).slice(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(c)) created = parseISO(c);
+      }
+      let yy, mm;
+      if (created) {
+        yy = created.getFullYear();
+        mm = created.getMonth() + 1;
+      } else {
+        yy = cy; mm = cm;
+      }
+      let sy = yy, sm = mm;
+      const ny = cy - 1;
+      if (sy < ny) { sy = ny; sm = cm + 1; }
+      if (sm > 12) { sm = 1; sy++; }
+      yy = sy; mm = sm;
+      while (yy < cy || (yy === cy && mm < cm)) {
+        const dim = daysInMonth(yy, mm);
+        const due = isoFromParts(yy, mm, Math.min(Number(b.due_day) || 1, dim));
+        if (due < today && !paidMonths[monthKeyFromISO(due)]) out.push({ b: b, due: due });
+        mm++;
+        if (mm > 12) { mm = 1; yy++; }
+      }
+    });
+    out.sort(function (a, c) { return String(a.due).localeCompare(String(c.due)); });
+    return out;
+  }
 
   function renderHome() {
     const st = monthStats();
@@ -513,6 +562,8 @@ function fmtSigned(v, lang) {
         return String(a.due).localeCompare(String(c.due));
       });
     const unpaid = rows.reduce(function (a, r) { return a + (r.paid ? 0 : (Number(r.b.amount) || 0)); }, 0);
+    const overduePast = overduePastEntries(now);
+    const overduePastTotal = overduePast.reduce(function (a, o) { return a + (Number(o.b.amount) || 0); }, 0);
 
     const html =
       '<div class="hero">' +
@@ -534,6 +585,15 @@ function fmtSigned(v, lang) {
       '</div>' +
 
       '<div class="section-gap"></div>' +
+
+      (overduePast.length ?
+        '<div class="card">' +
+        '<div class="card-title">' + icon('alert') + t('dash.overduePast') + (overduePastTotal > 0 ? '<span class="x-total">' + fmtMoney(overduePastTotal, LANG) + '</span>' : '') + '</div>' +
+        overduePast.map(function (o) { return renderBillRow(o.b, o.due); }).join('') +
+        (overduePastTotal > 0 ? '<div class="hb-total"><span>' + t('dash.extractTotal') + '</span><b>' + fmtMoney(overduePastTotal, LANG) + '</b></div>' : '') +
+        '</div>' +
+        '<div class="section-gap"></div>' : '') +
+
       '<div class="card">' +
       '<div class="card-title">' + icon('bills') + t('dash.monthBills') + ' · ' + monthLabel(monthKeyFromISO(today), LANG) +
       (unpaid > 0 ? '<span class="x-total">' + fmtMoney(unpaid, LANG) + '</span>' : '') +
@@ -1247,24 +1307,26 @@ function renderBillRow(b, dueOverride) {
     const due = dueOverride || billDueDate(b, now);
     const mk = monthKeyFromISO(due);
     const paid = (state.data.payments || []).some(function (p) { return p.bill_id === b.id && p.month === mk; });
-    const d = diffDays(due, today);
+const d = diffDays(due, today);
     let status, statusKey;
     if (paid) { status = 'paid'; statusKey = inc ? t('bill.received') : t('bill.paid'); }
     else if (d < 0) { status = 'overdue'; statusKey = t('bill.overdue'); }
     else { status = 'pending'; statusKey = t('bill.pending'); }
 const markLabel = inc ? t('bill.markReceived') : t('bill.markPaid');
+    const dueLabel = d < 0
+      ? (b.kind === 'once' ? t('bill.onceDate', { d: fmtDate(due, LANG) }) : fmtDate(due, LANG))
+      : (b.kind === 'once' ? t('bill.onceDate', { d: fmtDate(due, LANG) }) : t('bill.nextDue', { d: fmtDate(due, LANG) }));
     return '<div class="list-row" style="padding:12px 0 10px">' +
       '<span class="row-ico ' + (status === 'overdue' ? 'exp' : status === 'paid' ? 'inc' : '') + '">' + icon(catIconKey(b.category || 'cat.other')) + '</span>' +
       '<div class="row-main"><div class="row-title">' + esc(b.name) + '</div>' +
-      '<div class="row-sub">' + (b.kind === 'ccbill' ? esc(bankName(b.bank_id)) + ' · ' : '') + catName(b.category) + ' · ' +
-      (b.kind === 'once' ? t('bill.onceDate', { d: fmtDate(due, LANG) }) : t('bill.nextDue', { d: fmtDate(due, LANG) })) + '</div></div>' +
+      '<div class="row-sub">' + (b.kind === 'ccbill' ? esc(bankName(b.bank_id)) + ' · ' : '') + catName(b.category) + ' · ' + dueLabel + '</div></div>' +
       '<div class="row-end"><div class="row-amount' + (inc ? ' inc' : '') + '">' + (inc ? '+' : '') + fmtMoney(b.amount, LANG) + '<small style="color:var(--faint)">' + (b.kind === 'once' ? t('bill.once') : b.kind === 'ccbill' ? t('bill.ccbillShort') : t('bill.monthly')) + '</small></div>' +
       '<span class="bill-status ' + status + '">' + (status === 'paid' ? icon('check') : '') + statusKey + '</span></div>' +
       '</div>' +
       '<div class="row-actions">' +
       (paid ?
-        '<button class="act-btn" data-action="undo-paid" data-id="' + b.id + '">' + t('bill.undoPaid') + '</button>' :
-        '<button class="act-btn primary" data-action="mark-paid" data-id="' + b.id + '">' + markLabel + '</button>') +
+        '<button class="act-btn" data-action="undo-paid" data-id="' + b.id + '" data-due="' + due + '">' + t('bill.undoPaid') + '</button>' :
+        '<button class="act-btn primary" data-action="mark-paid" data-id="' + b.id + '" data-due="' + due + '">' + markLabel + '</button>') +
       '<button class="act-btn" data-action="edit-bill" data-id="' + b.id + '">' + t('common.edit') + '</button>' +
       '<button class="act-btn danger" data-action="del-bill" data-id="' + b.id + '">' + icon('trash') + '</button>' +
       '</div>';
@@ -1325,13 +1387,13 @@ const markLabel = inc ? t('bill.markReceived') : t('bill.markPaid');
     if (ok) { closeModal(); toast(t('bill.saved'), 'ok'); }
   }
 
-  function markPaidFlow(id) {
+function markPaidFlow(id, due) {
     const b = state.data.bills.find(function (x) { return x.id === id; });
     if (!b) return;
     const inc = (b.type || 'exp') === 'inc';
     const now = new Date();
-const due = monthDueDate(b, now);
-    const mk = monthKeyFromISO(due);
+    const ref = due || monthDueDate(b, now);
+    const mk = monthKeyFromISO(ref);
     const needsValue = !b.amount;
     openModal({
       title: inc ? t('bill.markReceivedTitle') : t('bill.markPaidTitle'),
@@ -1340,18 +1402,18 @@ const due = monthDueDate(b, now);
         (needsValue ? '<small style="color:var(--faint);font-size:11.5px">' + t('bill.amountRequiredHint') + '</small>' : '') +
         '<div class="modal-actions">' +
         '<button class="btn btn-soft" data-action="close-modal">' + t('common.cancel') + '</button>' +
-        '<button class="btn btn-primary" data-action="confirm-paid" data-id="' + id + '">' + (inc ? t('bill.markReceived') : t('bill.markPaid')) + '</button></div>'
+        '<button class="btn btn-primary" data-action="confirm-paid" data-id="' + id + '" data-due="' + ref + '">' + (inc ? t('bill.markReceived') : t('bill.markPaid')) + '</button></div>'
     });
   }
 
-  async function confirmPaid(id) {
+  async function confirmPaid(id, due) {
     const b = state.data.bills.find(function (x) { return x.id === id; });
     if (!b) return;
     const amt = parseAmount($('#m-pamount').value);
     if (amt === null || amt <= 0) { toast(t('bill.amountRequired'), 'err'); return; }
     const now = new Date();
-const due = monthDueDate(b, now);
-    const mk = monthKeyFromISO(due);
+    const ref = due || monthDueDate(b, now);
+    const mk = monthKeyFromISO(ref);
     const paid = Math.abs(amt);
 const ok = await handleMutation(async function () {
       await dbUpsert('bill_payments', { bill_id: id, month: mk, amount: paid, paid_at: todayISO() }, 'bill_id,month');
@@ -1363,12 +1425,12 @@ const ok = await handleMutation(async function () {
     if (ok) { closeModal(); toast((b.type || 'exp') === 'inc' ? t('bill.receivedMsg') : t('bill.paidMsg'), 'ok'); }
   }
 
-  async function undoPaid(id) {
+  async function undoPaid(id, due) {
     const now = new Date();
     const b = state.data.bills.find(function (x) { return x.id === id; });
     if (!b) return;
-const due = monthDueDate(b, now);
-    const mk = monthKeyFromISO(due);
+const ref = due || monthDueDate(b, now);
+    const mk = monthKeyFromISO(ref);
     const pay = state.data.payments.find(function (p) { return p.bill_id === id && p.month === mk; });
     if (!pay) return;
     const ok = await handleMutation(async function () {
@@ -1733,9 +1795,9 @@ case 'open-bill': openBillModal(null); break;
         });
         break;
       }
-case 'mark-paid': markPaidFlow(id); break;
-      case 'confirm-paid': confirmPaid(id); break;
-      case 'undo-paid': undoPaid(id); break;
+case 'mark-paid': markPaidFlow(id, el.getAttribute('data-due') || null); break;
+      case 'confirm-paid': confirmPaid(id, el.getAttribute('data-due') || null); break;
+      case 'undo-paid': undoPaid(id, el.getAttribute('data-due') || null); break;
       case 'save-alias': saveAlias(el.getAttribute('data-raw')); break;
       case 'merch-pending': state.merchFilter.pendingOnly = val === '1'; renderMerchants(); break;
       case 'toggle-theme': {
